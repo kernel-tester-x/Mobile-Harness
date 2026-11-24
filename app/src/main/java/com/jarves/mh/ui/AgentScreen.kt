@@ -106,15 +106,8 @@ import com.jarves.mh.model.providersForAgent
 import com.jarves.mh.network.ConnectionValidation
 import com.jarves.mh.network.DiscoveredModel
 import com.jarves.mh.network.ModelDiscoveryResult
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import com.jarves.mh.runtime.AntigravityAuthStatus
 import com.jarves.mh.runtime.LocalModelManager
-import kotlinx.coroutines.launch
-import com.jarves.mh.runtime.LocalModelManager
-import kotlinx.coroutines.launch
 import com.jarves.mh.ui.theme.PocketBlue
 import com.jarves.mh.ui.theme.PocketOrange
 import kotlinx.coroutines.launch
@@ -205,31 +198,6 @@ fun AgentScreen(
     val context = LocalContext.current
     var selectedKind by rememberSaveable(state.provider.kind) { mutableStateOf(state.provider.kind) }
     var localAiTabSelected by rememberSaveable { mutableStateOf(state.provider.kind == ProviderKind.LOCAL_AI) }
-    var localUncensored by rememberSaveable { mutableStateOf(false) }
-    var localDownloadPct by remember { mutableStateOf<Int?>(null) }
-    var localStatusMsg by remember { mutableStateOf("") }
-    var localServerAlive by remember { mutableStateOf(false) }
-    var localFilesTick by remember { mutableStateOf(0) }
-    val importGgufLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch {
-            runCatching { LocalModelManager.importGguf(context, uri) }
-                .onSuccess { f -> localFilesTick++; localStatusMsg = "Imported ${f.name}" }
-                .onFailure { e -> localStatusMsg = e.message ?: "Import failed" }
-        }
-    }
-    var localAiTabSelected by rememberSaveable { mutableStateOf(state.provider.kind == ProviderKind.LOCAL_AI) }
-    var localUncensored by rememberSaveable { mutableStateOf(false) }
-    var localDownloadPct by remember { mutableStateOf<Int?>(null) }
-    var localStatusMsg by remember { mutableStateOf("") }
-    var localServerAlive by remember { mutableStateOf(false) }
-    var localFilesTick by remember { mutableStateOf(0) }
-    val importGgufLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch {
-            runCatching { LocalModelManager.importGguf(context, uri) }
-                .onSuccess { f -> localFilesTick++; localStatusMsg = "Imported ${f.name}" }
-                .onFailure { e -> localStatusMsg = e.message ?: "Import failed" }
-        }
-    }
     val selectedProviderTitle = stringResource(selectedKind.titleRes())
     val selectedProviderVerifiedMessage = stringResource(
         R.string.agent_connection_verified,
@@ -698,21 +666,256 @@ fun AgentScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        Modifier.weight(1f),
+                        contentPadding = PaddingValues(bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (modelSearch.isNotBlank() && filteredModels.none { it.id.equals(modelSearch.trim(), ignoreCase = true) }) {
+                            item {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = PocketOrange.copy(alpha = 0.12f),
+                                    border = BorderStroke(1.dp, PocketOrange.copy(alpha = 0.5f)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            model = modelSearch.trim()
+                                            modelSearch = ""
+                                            showModels = false
+                                        },
+                                ) {
+                                    Row(
+                                        Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(Icons.Default.Check, null, tint = PocketOrange, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(10.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(stringResource(R.string.st_use_custom_model_id), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(modelSearch.trim(), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = PocketOrange)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        items(filteredModels, key = { it.id }) { option ->
+                            val isSelected = model == option.id
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (isSelected) PocketOrange.copy(alpha = 0.10f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) PocketOrange.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        model = option.id
+                                        modelSearch = ""
+                                        showModels = false
+                                    },
+                            ) {
+                                Row(
+                                    Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                option.displayName,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 14.sp,
+                                                color = if (isSelected) PocketOrange else MaterialTheme.colorScheme.onSurface,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            if (option.isFree) {
+                                                Spacer(Modifier.width(6.dp))
+                                                Text(stringResource(R.string.st_free), color = Color(0xFF58C99C), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                        if (option.displayName != option.id) {
+                                            Text(
+                                                option.id,
+                                                fontSize = 11.sp,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                    }
+                                    AgentSelectionDot(selected = isSelected)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                modifier = Modifier.padding(top = 4.dp),
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                            modifier = Modifier.size(34.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.SmartToy,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(stringResource(R.string.agent_screen_title), fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                            Text(
+                                if (isAntigravity) {
+                                    "Antigravity · ${formatAntigravityModelName(state.antigravityModel)}"
+                                } else {
+                                    "${state.agentKind.localizedTitle()} · ${model.ifBlank { selectedKind.localizedTitle() }}"
+                                },
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    // Top Bar Live Status Pill
+                    Surface(
+                        color = pillBg,
+                        shape = RoundedCornerShape(50),
+                        border = BorderStroke(1.dp, dot.copy(alpha = 0.35f)),
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(Modifier.size(6.5.dp).background(dot, CircleShape))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                if (pillLoading) stringResource(R.string.provider_checking) else label,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = dot,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+            )
+        },
+    ) { padding ->
+        LazyColumn(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .imePadding(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            // ── 1. Compact 3-Way Segmented Engine Selector ──
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            orderedAgents.forEach { agent ->
+                                val isSelected = !localAiTabSelected && viewedAgent == agent
+                                val installedVersion = state.installedAgentVersions[agent]
+                                val isInstalled = installedVersion != null
+                                val updateAvailable = state.agentUpdates.containsKey(agent)
+                                val shortTitle = when (agent) {
+                                    AgentKind.ANTIGRAVITY -> "Antigravity"
+                                    AgentKind.DEEPSEEK_HARNESS -> "DeepSeek"
+                                    AgentKind.CLAUDE_CODE -> "Claude Code"
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
+                                    border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)) else null,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable(enabled = state.agentInstalling == null) {
+                                            localAiTabSelected = false
+                                            viewedAgent = agent
+                                            if (isInstalled) onSelectAgent(agent)
+                                        },
+                                ) {
+                                    Box(
+                                        modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                shortTitle,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                fontSize = 12.sp,
+                                                color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                            )
+                                            if (updateAvailable) {
+                                                Spacer(Modifier.width(3.dp))
+                                                Box(Modifier.size(5.dp).background(PocketOrange, CircleShape))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (localAiTabSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
                                 border = if (localAiTabSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)) else null,
                                 modifier = Modifier.weight(1f).clickable {
-                                    localAiTabSelected = true; viewedAgent = AgentKind.DEEPSEEK_HARNESS; selectedKind = ProviderKind.LOCAL_AI
-                                    onSelectAgent(AgentKind.DEEPSEEK_HARNESS); scope.launch { localServerAlive = LocalModelManager.isServerRunning() }
+                                    localAiTabSelected = true
+                                    viewedAgent = AgentKind.DEEPSEEK_HARNESS
+                                    selectedKind = ProviderKind.LOCAL_AI
+                                    onSelectAgent(AgentKind.DEEPSEEK_HARNESS)
                                 },
-                            ) { Box(Modifier.padding(vertical = 12.dp, horizontal = 4.dp), contentAlignment = Alignment.Center) { Text("Local AI", fontWeight = if (localAiTabSelected) FontWeight.Bold else FontWeight.Medium, fontSize = 12.sp, color = if (localAiTabSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) } }
+                            ) {
+                                Box(Modifier.padding(vertical = 12.dp, horizontal = 4.dp), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        "Local AI",
+                                        fontWeight = if (localAiTabSelected) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 12.sp,
+                                        color = if (localAiTabSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
                         }
                     }
+
                     if (localAiTabSelected) {
                         Spacer(Modifier.height(10.dp))
                         LocalAiCard(context = context, provider = state.provider, onSaveProvider = onSaveProvider, scope = scope)
                     }
+
                     if (state.agentInstalling == viewedAgent) {
                         Spacer(Modifier.height(6.dp))
                         Surface(
