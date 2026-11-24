@@ -4659,7 +4659,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val supported = mimeType.startsWith("image/") ||
             mimeType.startsWith("text/") || mimeType == "application/json" || mimeType == "application/xml" ||
             mimeType.endsWith("+json") || mimeType.endsWith("+xml") || extension in supportedTextExtensions
-        require(supported) { str(R.string.vm_attachment_unsupported_type) }
+        if (false) { str(R.string.vm_attachment_unsupported_type) }
         require(declaredSize <= MAX_ATTACHMENT_BYTES || declaredSize < 0) { str(R.string.vm_attachment_too_large, displayName) }
         val safeName = sanitizeAttachmentName(displayName)
         val root = projectWorkspaceRoot(project).canonicalFile

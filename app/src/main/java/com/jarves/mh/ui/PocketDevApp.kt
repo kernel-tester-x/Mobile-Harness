@@ -4788,7 +4788,7 @@ private fun WorkspaceScreen(
                     agentKind = state.agentKind,
                     pendingAttachments = state.pendingAttachments,
                     onAttach = {
-                        attachmentLauncher.launch(arrayOf("image/*", "text/*", "application/json", "application/xml"))
+                        attachmentLauncher.launch(arrayOf("*/*"))
                     },
                     onTakePhoto = {
                         runCatching {
