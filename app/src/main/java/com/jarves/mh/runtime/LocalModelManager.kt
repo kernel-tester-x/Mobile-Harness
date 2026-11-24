@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -87,18 +88,28 @@ object LocalModelManager {
             }
         }
         val dest = File(modelsDir(context), name.replace(Regex("[^a-zA-Z0-9._-]"), "_"))
-        context.contentResolver.openInputStream(uri)?.use { input -> dest.outputStream().buffered(262144).use { output -> input.copyTo(output, 262144) } } ?: error("Could not read file")
+        context.contentResolver.openInputStream(uri)?.use { input -> dest.outputStream().buffered(1048576).use { output -> input.copyTo(output, 1048576) } } ?: error("Could not read file")
         dest
     }
 
-    suspend fun downloadModel(context: Context, preset: LocalModelPreset, onProgress: (Int) -> Unit): File = withContext(Dispatchers.IO) {
-        val dest = File(modelsDir(context), preset.filename)
-        val tmp = File(modelsDir(context), "${preset.filename}.part")
-        val conn = (URL(preset.downloadUrl).openConnection() as HttpURLConnection).apply { instanceFollowRedirects = true; connectTimeout = 20000; readTimeout = 30000 }
-        val total = conn.contentLengthLong
+    private fun downloadWithResume(url: String, dest: File, tmp: File, onProgress: (Int) -> Unit): File {
+        val existing = if (tmp.exists()) tmp.length() else 0L
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            instanceFollowRedirects = true
+            connectTimeout = 15000
+            readTimeout = 30000
+            setRequestProperty("Accept-Encoding", "identity")
+            if (existing > 0) setRequestProperty("Range", "bytes=$existing-")
+        }
+        val code = conn.responseCode
+        val append = code == 206 && existing > 0
+        if (code !in 200..299) error("HTTP $code")
+        val contentLen = conn.contentLengthLong
+        val total = if (append && contentLen > 0) existing + contentLen else contentLen
+        var copied = if (append) existing else 0L
         conn.inputStream.use { input ->
-            tmp.outputStream().buffered(262144).use { output ->
-                val buf = ByteArray(262144); var copied = 0L
+            FileOutputStream(tmp, append).buffered(1048576).use { output ->
+                val buf = ByteArray(1048576)
                 while (true) {
                     val n = input.read(buf); if (n <= 0) break
                     output.write(buf, 0, n); copied += n
@@ -107,7 +118,26 @@ object LocalModelManager {
             }
         }
         if (dest.exists()) dest.delete()
-        tmp.renameTo(dest); onProgress(100); dest
+        tmp.renameTo(dest)
+        onProgress(100)
+        return dest
+    }
+
+    suspend fun downloadModel(context: Context, preset: LocalModelPreset, onProgress: (Int) -> Unit): File = withContext(Dispatchers.IO) {
+        val candidates = listOf(preset) + presets.filter { it.uncensored == preset.uncensored && it.id != preset.id }
+        var lastErr: Throwable? = null
+        for (cand in candidates) {
+            val urls = listOf(cand.downloadUrl, cand.downloadUrl.replace("https://huggingface.co/", "https://hf-mirror.com/"))
+            for (u in urls) {
+                val dest = File(modelsDir(context), cand.filename)
+                val tmp = File(modelsDir(context), "${cand.filename}.part")
+                val res = runCatching { downloadWithResume(u, dest, tmp, onProgress) }
+                if (res.isSuccess) return@withContext res.getOrThrow()
+                lastErr = res.exceptionOrNull()
+                tmp.delete()
+            }
+        }
+        throw (lastErr ?: IllegalStateException("All model mirrors failed"))
     }
 
     suspend fun isServerRunning(): Boolean = withContext(Dispatchers.IO) {

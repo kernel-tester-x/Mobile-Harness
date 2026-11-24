@@ -3,6 +3,9 @@ package com.jarves.mh.ui
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,7 +62,7 @@ fun LocalAiCard(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().animateContentSize(spring(stiffness = Spring.StiffnessMediumLow)),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -99,7 +102,7 @@ fun LocalAiCard(
                         scope.launch {
                             localDownloadPct = 0
                             runCatching { LocalModelManager.downloadModel(context, preset) { localDownloadPct = it } }
-                                .onSuccess { localFilesTick++; localStatusMsg = "Downloaded ${preset.filename}" }
+                                .onSuccess { f -> localFilesTick++; localStatusMsg = "Downloaded ${f.name}" }
                                 .onFailure { localStatusMsg = it.message ?: "Download failed" }
                             localDownloadPct = null
                         }
