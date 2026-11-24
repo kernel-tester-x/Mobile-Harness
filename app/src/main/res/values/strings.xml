@@ -386,4 +386,6 @@
 
     <!-- Accessibility Service -->
     <string name="accessibility_service_description">Enables screen reading, UI automation, and remote control via HTTP bridge for the Mobile Harness coding agent.</string>
+    <string name="provider_title_local_ai">Local AI (Offline)</string>
+    <string name="provider_subtitle_local_ai">On-device GGUF coding models via llama-server</string>
 </resources>

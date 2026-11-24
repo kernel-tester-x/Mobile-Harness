@@ -41,6 +41,15 @@ enum class ProviderKind(
         fixedBaseUrl = true,
         fixedProtocol = true,
     ),
+    LOCAL_AI(
+        "Local AI (Offline)",
+        "On-device GGUF coding models via llama-server",
+        ProviderProtocol.OPENAI_CHAT,
+        "http://127.0.0.1:8080/v1",
+        "qwen2.5-coder-3b-instruct-q4_k_m",
+        fixedBaseUrl = true,
+        fixedProtocol = true,
+    ),
     CUSTOM("Custom API", "Anthropic-compatible endpoint", ProviderProtocol.ANTHROPIC_GATEWAY, "", "", true),
 }
 
@@ -88,6 +97,7 @@ val DEEPSEEK_HARNESS_PROVIDERS: Set<ProviderKind> = setOf(
     ProviderKind.LLM_ROUTER,
     ProviderKind.KIMI,
     ProviderKind.NVIDIA_NIM,
+    ProviderKind.LOCAL_AI,
     ProviderKind.CUSTOM,
 )
 
@@ -95,12 +105,13 @@ val DSH_PROTOCOL_PROVIDERS: Set<ProviderKind> = setOf(
     ProviderKind.KIMI,
     ProviderKind.OPENCODE_ZEN,
     ProviderKind.NVIDIA_NIM,
+    ProviderKind.LOCAL_AI,
     ProviderKind.CUSTOM,
 )
 
 fun defaultDshApiForProvider(kind: ProviderKind): String = when (kind) {
     ProviderKind.OPENCODE_ZEN -> "openai-responses"
-    ProviderKind.NVIDIA_NIM -> "openai-completions"
+    ProviderKind.NVIDIA_NIM, ProviderKind.LOCAL_AI -> "openai-completions"
     else -> "anthropic-messages"
 }
 

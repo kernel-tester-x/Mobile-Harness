@@ -106,7 +106,11 @@ import com.jarves.mh.model.providersForAgent
 import com.jarves.mh.network.ConnectionValidation
 import com.jarves.mh.network.DiscoveredModel
 import com.jarves.mh.network.ModelDiscoveryResult
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.jarves.mh.runtime.AntigravityAuthStatus
+import com.jarves.mh.runtime.LocalModelManager
+import kotlinx.coroutines.launch
 import com.jarves.mh.ui.theme.PocketBlue
 import com.jarves.mh.ui.theme.PocketOrange
 import kotlinx.coroutines.launch
@@ -196,6 +200,19 @@ fun AgentScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var selectedKind by rememberSaveable(state.provider.kind) { mutableStateOf(state.provider.kind) }
+    var localAiTabSelected by rememberSaveable { mutableStateOf(state.provider.kind == ProviderKind.LOCAL_AI) }
+    var localUncensored by rememberSaveable { mutableStateOf(false) }
+    var localDownloadPct by remember { mutableStateOf<Int?>(null) }
+    var localStatusMsg by remember { mutableStateOf("") }
+    var localServerAlive by remember { mutableStateOf(false) }
+    var localFilesTick by remember { mutableStateOf(0) }
+    val importGgufLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            runCatching { LocalModelManager.importGguf(context, uri) }
+                .onSuccess { f -> localFilesTick++; localStatusMsg = "Imported ${f.name}" }
+                .onFailure { e -> localStatusMsg = e.message ?: "Import failed" }
+        }
+    }
     val selectedProviderTitle = stringResource(selectedKind.titleRes())
     val selectedProviderVerifiedMessage = stringResource(
         R.string.agent_connection_verified,
@@ -664,6 +681,56 @@ fun AgentScreen(
                                     }
                                 }
                             }
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (localAiTabSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
+                                border = if (localAiTabSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)) else null,
+                                modifier = Modifier.weight(1f).clickable {
+                                    localAiTabSelected = true; viewedAgent = AgentKind.DEEPSEEK_HARNESS; selectedKind = ProviderKind.LOCAL_AI
+                                    onSelectAgent(AgentKind.DEEPSEEK_HARNESS); scope.launch { localServerAlive = LocalModelManager.isServerRunning() }
+                                },
+                            ) { Box(Modifier.padding(vertical = 12.dp, horizontal = 4.dp), contentAlignment = Alignment.Center) { Text("Local AI", fontWeight = if (localAiTabSelected) FontWeight.Bold else FontWeight.Medium, fontSize = 12.sp, color = if (localAiTabSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) } }
+                        }
+                    }
+                    if (localAiTabSelected) {
+                        Spacer(Modifier.height(10.dp))
+                        val ramGb = remember { LocalModelManager.getTotalRamGb(context) }
+                        val downloaded = remember(localFilesTick) { LocalModelManager.listDownloadedModels(context) }
+                        val filteredPresets = LocalModelManager.presets.filter { it.uncensored == localUncensored }
+                        Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)), modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Local AI (Offline)", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                    Text(String.format("%.1f GB RAM · %s", ramGb, if (localServerAlive) "Server On" else "Server Off"), fontSize = 12.sp, color = if (localServerAlive) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FilterChip(selected = !localUncensored, onClick = { localUncensored = false }, label = { Text("Censored") })
+                                    FilterChip(selected = localUncensored, onClick = { localUncensored = true }, label = { Text("Uncensored") })
+                                }
+                                filteredPresets.forEach { preset ->
+                                    val exists = downloaded.any { it.name == preset.filename }
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) { Text(preset.title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp); Text(preset.sizeLabel, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                        OutlinedButton(enabled = localDownloadPct == null, onClick = {
+                                            scope.launch {
+                                                localDownloadPct = 0
+                                                runCatching { LocalModelManager.downloadModel(context, preset) { localDownloadPct = it } }.onSuccess { localFilesTick++; localStatusMsg = "Downloaded ${preset.filename}" }.onFailure { localStatusMsg = it.message ?: "Download failed" }
+                                                localDownloadPct = null
+                                            }
+                                        }) { Text(if (localDownloadPct != null) "${localDownloadPct}%" else if (exists) "Re-download" else "Download") }
+                                    }
+                                }
+                                if (downloaded.isNotEmpty()) Text("Installed: " + downloaded.joinToString { it.name }, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(onClick = { importGgufLauncher.launch(arrayOf("*/*")) }, modifier = Modifier.weight(1f)) { Text("Import .gguf") }
+                                    Button(onClick = {
+                                        val chosen = filteredPresets.firstOrNull()?.id ?: ProviderKind.LOCAL_AI.defaultModel
+                                        onSaveProvider(state.provider.copy(kind = ProviderKind.LOCAL_AI, baseUrl = "http://127.0.0.1:8080/v1", model = chosen, dshApi = "openai-completions"), "local")
+                                        localStatusMsg = "Local AI active (127.0.0.1:8080/v1)"
+                                    }, modifier = Modifier.weight(1f)) { Text("Use Local AI") }
+                                }
+                                if (localStatusMsg.isNotEmpty()) Text(localStatusMsg, fontSize = 11.sp, color = PocketOrange)
+                            }
                         }
                     }
                 } else {
@@ -844,7 +911,7 @@ fun AgentScreen(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             orderedAgents.forEach { agent ->
-                                val isSelected = viewedAgent == agent
+                                val isSelected = !localAiTabSelected && viewedAgent == agent
                                 val installedVersion = state.installedAgentVersions[agent]
                                 val isInstalled = installedVersion != null
                                 val updateAvailable = state.agentUpdates.containsKey(agent)
@@ -860,6 +927,7 @@ fun AgentScreen(
                                     modifier = Modifier
                                         .weight(1f)
                                         .clickable(enabled = state.agentInstalling == null) {
+                                            localAiTabSelected = false
                                             viewedAgent = agent
                                             if (isInstalled) onSelectAgent(agent)
                                         },
