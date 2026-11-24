@@ -1572,6 +1572,13 @@ class RuntimeInstaller(private val context: Context) {
             add("/proc")
             add("-b")
             add("/sys")
+            // Bind mount /sdcard (typically /storage/emulated/0) for external storage access
+            val sdcardPath = File("/sdcard")
+            if (sdcardPath.exists()) {
+                File(rootfs, "sdcard").mkdirs()
+                add("-b")
+                add("${sdcardPath.absolutePath}:/sdcard")
+            }
             // ARM64 Android build tools (notably aapt2) use Bionic's
             // /system/bin/linker64 and, on newer releases, APEX libraries.
             listOf("/system", "/apex", "/vendor", "/product").forEach { hostPath ->

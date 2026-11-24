@@ -383,4 +383,7 @@
     <string name="diagnostics_inactive_stopped">Inactive processes stopped</string>
     <string name="diagnostics_cache_busy">Wait for active work to finish before clearing output</string>
     <string name="diagnostics_cache_cleared">Disposable runtime output cleared</string>
+
+    <!-- Accessibility Service -->
+    <string name="accessibility_service_description">Enables screen reading, UI automation, and remote control via HTTP bridge for the Mobile Harness coding agent.</string>
 </resources>
