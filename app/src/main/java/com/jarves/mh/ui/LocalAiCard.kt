@@ -36,6 +36,7 @@ import com.jarves.mh.runtime.LocalModelManager
 import com.jarves.mh.runtime.LocalModelPreset
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import java.io.File
 
 @Composable
 fun LocalAiCard(
@@ -58,10 +59,20 @@ fun LocalAiCard(
 
     LaunchedEffect(Unit) { localServerAlive = LocalModelManager.isServerRunning() }
 
+    fun applyAndStart(file: File) {
+        onSaveProvider(provider.copy(kind = ProviderKind.LOCAL_AI, baseUrl = "http://127.0.0.1:8080/v1", model = file.name, dshApi = "openai-completions"), "local")
+        scope.launch {
+            val msg = LocalModelManager.tryAutoStartServer(context, file)
+            localServerAlive = LocalModelManager.isServerRunning()
+            clipboard.setText(AnnotatedString(LocalModelManager.recommendedServerCommand(file.absolutePath)))
+            localStatusMsg = "$msg (saved in Downloads/MobileHarnessModels)"
+        }
+    }
+
     val importGgufLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             runCatching { LocalModelManager.importGguf(context, uri) }
-                .onSuccess { f -> localFilesTick++; localStatusMsg = "Imported ${f.name}" }
+                .onSuccess { f -> localFilesTick++; applyAndStart(f) }
                 .onFailure { e -> localStatusMsg = e.message ?: "Import failed" }
         }
     }
@@ -82,12 +93,9 @@ fun LocalAiCard(
         Modifier.fillMaxWidth().animateContentSize(spring(stiffness = Spring.StiffnessMediumLow)),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // Header + 2-column Edge Gallery quick cards
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Text("Local AI Gallery", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-                Text(String.format("%.1f GB RAM · %.1f GB free · %s", ramGb, freeGb, if (localServerAlive) "Server Online" else "Server Offline"), fontSize = 12.sp, color = if (localServerAlive) Color(0xFF81C995) else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        Column {
+            Text("Local AI Gallery", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+            Text(String.format("%.1f GB RAM · %.1f GB free · %s", ramGb, freeGb, if (localServerAlive) "Server Online" else "Server Offline"), fontSize = 12.sp, color = if (localServerAlive) Color(0xFF81C995) else MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -98,7 +106,7 @@ fun LocalAiCard(
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Import .gguf", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = accentBlue)
-                    Text("Load any local model", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Auto-applies model", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             Surface(
@@ -106,7 +114,7 @@ fun LocalAiCard(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                 modifier = Modifier.weight(1f).clickable {
                     clipboard.setText(AnnotatedString(LocalModelManager.buildLlamaServerCommand()))
-                    localStatusMsg = "Copied fogos ARMv8.2 build cmd"
+                    localStatusMsg = "Copied fogos ARMv8.2 build cmd (paste in Terminal)"
                 },
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -116,7 +124,23 @@ fun LocalAiCard(
             }
         }
 
-        // Filter Pills
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+            modifier = Modifier.fillMaxWidth().clickable {
+                clipboard.setText(AnnotatedString(LocalModelManager.miBandSkillCommand()))
+                localStatusMsg = "Copied Mi Band 10 (Vela JS) skill cmd — paste inside your Mi Band project Terminal"
+            },
+        ) {
+            Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Mi Band 10 / Vela QuickApp Skills", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = accentBlue)
+                    Text("Tap to copy skill installer for Mi Band projects only", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text("Copy", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = accentBlue)
+            }
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("ALL" to "All", "CENSORED" to "Censored", "UNCENSORED" to "Uncensored", "4_8" to "Fast 4-6GB").forEach { (key, label) ->
                 val active = filterMode == key
@@ -131,33 +155,20 @@ fun LocalAiCard(
             }
         }
 
-        // Live Hugging Face Search Bar
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search Hugging Face (e.g. Qwen3.5, Gemma 4)...", fontSize = 12.sp) },
-                singleLine = true,
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.weight(1f),
-            )
-            Button(
-                enabled = !searching,
-                shape = RoundedCornerShape(24.dp),
-                onClick = {
-                    scope.launch {
-                        searching = true
-                        val q = if (filterMode == "UNCENSORED" && !searchQuery.contains("abliterated", true) && !searchQuery.contains("uncensored", true)) "${searchQuery} abliterated" else searchQuery
-                        runCatching { LocalModelManager.searchHuggingFaceGguf(q) }
-                            .onSuccess { hfResults = it; localStatusMsg = "Found ${it.size} models" }
-                            .onFailure { localStatusMsg = it.message ?: "Search failed" }
-                        searching = false
-                    }
-                },
-            ) { Text(if (searching) "..." else "Search") }
+            OutlinedTextField(value = searchQuery, onValueChange = { searchQuery = it }, placeholder = { Text("Search Hugging Face (e.g. Qwen3.5, Gemma 4)...", fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(24.dp), modifier = Modifier.weight(1f))
+            Button(enabled = !searching, shape = RoundedCornerShape(24.dp), onClick = {
+                scope.launch {
+                    searching = true
+                    val q = if (filterMode == "UNCENSORED" && !searchQuery.contains("abliterated", true) && !searchQuery.contains("uncensored", true)) "${searchQuery} abliterated" else searchQuery
+                    runCatching { LocalModelManager.searchHuggingFaceGguf(q) }
+                        .onSuccess { hfResults = it; localStatusMsg = "Found ${it.size} models" }
+                        .onFailure { localStatusMsg = it.message ?: "Search failed" }
+                    searching = false
+                }
+            }) { Text(if (searching) "..." else "Search") }
         }
 
-        // Expandable Edge Gallery Model Cards
         shownModels.forEach { preset ->
             val exists = downloaded.any { it.name == preset.filename }
             val (compatText, compatColorInt) = LocalModelManager.compatibilityLabel(ramGb, preset)
@@ -183,7 +194,6 @@ fun LocalAiCard(
                         }
                         Icon(if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null)
                     }
-
                     Text(preset.reviewNote, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
                     AnimatedVisibility(
@@ -192,37 +202,25 @@ fun LocalAiCard(
                         exit = fadeOut(tween(180)) + shrinkVertically(spring(stiffness = Spring.StiffnessMediumLow)),
                     ) {
                         Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("File: ${preset.filename}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Saves to: Download/MobileHarnessModels/${preset.filename}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (isDownloadingThis && localDownloadPct != null) {
                                 LinearProgressIndicator(progress = { (localDownloadPct ?: 0) / 100f }, modifier = Modifier.fillMaxWidth())
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(
-                                    enabled = localDownloadPct == null,
-                                    shape = RoundedCornerShape(24.dp),
-                                    modifier = Modifier.weight(1f),
-                                    onClick = {
-                                        scope.launch {
-                                            downloadingId = preset.id; localDownloadPct = 0
-                                            runCatching { LocalModelManager.downloadModel(context, preset) { localDownloadPct = it } }
-                                                .onSuccess { f -> localFilesTick++; localStatusMsg = "Downloaded ${f.name}" }
-                                                .onFailure { localStatusMsg = it.message ?: "Download failed" }
-                                            localDownloadPct = null; downloadingId = null
-                                        }
-                                    },
-                                ) { Text(if (isDownloadingThis) "${localDownloadPct ?: 0}%" else if (exists) "Re-download" else "Download") }
+                                OutlinedButton(enabled = localDownloadPct == null, shape = RoundedCornerShape(24.dp), modifier = Modifier.weight(1f), onClick = {
+                                    scope.launch {
+                                        downloadingId = preset.id; localDownloadPct = 0
+                                        runCatching { LocalModelManager.downloadModel(context, preset) { localDownloadPct = it } }
+                                            .onSuccess { f -> localFilesTick++; applyAndStart(f) }
+                                            .onFailure { localStatusMsg = it.message ?: "Download failed" }
+                                        localDownloadPct = null; downloadingId = null
+                                    }
+                                }) { Text(if (isDownloadingThis) "${localDownloadPct ?: 0}%" else if (exists) "Re-download & Use" else "Download & Use") }
 
                                 if (exists) {
-                                    Button(
-                                        shape = RoundedCornerShape(24.dp),
-                                        modifier = Modifier.weight(1f),
-                                        onClick = {
-                                            val f = downloaded.first { it.name == preset.filename }
-                                            onSaveProvider(provider.copy(kind = ProviderKind.LOCAL_AI, baseUrl = "http://127.0.0.1:8080/v1", model = f.name, dshApi = "openai-completions"), "local")
-                                            clipboard.setText(AnnotatedString(LocalModelManager.recommendedServerCommand(f.absolutePath)))
-                                            localStatusMsg = "Active & copied server cmd for ${f.name}"
-                                        },
-                                    ) { Text("Use Model") }
+                                    Button(shape = RoundedCornerShape(24.dp), modifier = Modifier.weight(1f), onClick = {
+                                        applyAndStart(downloaded.first { it.name == preset.filename })
+                                    }) { Text("Use Model") }
                                 }
                             }
                         }
@@ -232,7 +230,7 @@ fun LocalAiCard(
         }
 
         if (downloaded.isNotEmpty()) {
-            Text("Installed on Device (${downloaded.size})", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            Text("Saved in Downloads (${downloaded.size})", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             downloaded.forEach { file ->
                 Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f), modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -240,18 +238,12 @@ fun LocalAiCard(
                             Text(file.name, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                             Text(String.format("%.2f GB", file.length() / (1024.0 * 1024.0 * 1024.0)), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        TextButton(onClick = {
-                            onSaveProvider(provider.copy(kind = ProviderKind.LOCAL_AI, baseUrl = "http://127.0.0.1:8080/v1", model = file.name, dshApi = "openai-completions"), "local")
-                            clipboard.setText(AnnotatedString(LocalModelManager.recommendedServerCommand(file.absolutePath)))
-                            localStatusMsg = "Copied server cmd for ${file.name}"
-                        }) { Text("Use & Copy Cmd") }
+                        TextButton(onClick = { applyAndStart(file) }) { Text("Use") }
                     }
                 }
             }
         }
 
-        if (localStatusMsg.isNotEmpty()) {
-            Text(localStatusMsg, fontSize = 12.sp, color = accentBlue)
-        }
+        if (localStatusMsg.isNotEmpty()) Text(localStatusMsg, fontSize = 12.sp, color = accentBlue)
     }
 }
