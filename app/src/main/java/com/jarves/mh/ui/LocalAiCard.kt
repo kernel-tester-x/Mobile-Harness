@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jarves.mh.model.ProviderKind
 import com.jarves.mh.model.ProviderProfile
+import com.jarves.mh.runtime.AppLogExporter
 import com.jarves.mh.runtime.LocalModelManager
 import com.jarves.mh.runtime.LocalModelPreset
 import kotlinx.coroutines.CoroutineScope
@@ -245,5 +246,9 @@ fun LocalAiCard(
         }
 
         if (localStatusMsg.isNotEmpty()) Text(localStatusMsg, fontSize = 12.sp, color = accentBlue)
+            OutlinedButton(
+                onClick = { localStatusMsg = AppLogExporter.export(context) },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Export Full App & AI Log") }
     }
 }
