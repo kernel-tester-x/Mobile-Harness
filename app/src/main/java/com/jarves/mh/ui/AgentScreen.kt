@@ -1648,6 +1648,14 @@ private fun AgentProviderCard(
                 }
             }
 
+            if (selectedKind == ProviderKind.LOCAL_AI) {
+                LocalAiBottomPanel(
+                    context = context,
+                    provider = state.provider,
+                    onSaveProvider = onSaveProvider,
+                    scope = scope,
+                )
+            } else {
             if (selectedKind != ProviderKind.CLAUDE) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
 
@@ -1988,6 +1996,7 @@ private fun AgentProviderCard(
                         )
                     }
                 }
+            }
             }
         }
     }
