@@ -1,6 +1,12 @@
 package com.jarves.mh.ui
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
+import androidx.compose.material.icons.filled.Delete
 import android.media.MediaScannerConnection
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -202,7 +208,7 @@ fun LocalAiCard(
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             localStatusMsg = "Importing AI model to Downloads..."
-            val imported = withContext(Dispatchers.IO) {
+            val importedRes = withContext(Dispatchers.IO) { runCatching {
                 var name = "imported-model.gguf"
                 context.contentResolver.query(uri, null, null, null, null)?.use { c ->
                     val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -214,9 +220,9 @@ fun LocalAiCard(
                 }
                 MediaScannerConnection.scanFile(context, arrayOf(dst.absolutePath), null, null)
                 dst
-            }
+            } }
             filesTick++
-            applyLocalModel(context, provider, onSaveProvider, scope, imported) { localStatusMsg = it }
+            importedRes.onSuccess { dst -> dst, onStatus = { localStatusMsg = it }) }.onFailure { localStatusMsg = "Import failed: ${it.message}" }
         }
     }
 
@@ -335,6 +341,17 @@ fun LocalAiCard(
             ) { Text(if (searching) "..." else "Search") }
         }
 
+        if (Build.VERSION.SDK_INT >= 30 && !Environment.isExternalStorageManager()) {
+            Button(
+                onClick = {
+                    runCatching {
+                        context.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${context.packageName}")))
+                    }
+                },
+                shape = pillShape,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Grant All Files Access (Required for Downloads)") }
+        }
         if (localStatusMsg.isNotEmpty()) {
             Text(localStatusMsg, fontSize = 12.sp, color = Color(0xFFA8C7FA))
         }
@@ -444,7 +461,7 @@ fun LocalAiBottomPanel(
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             statusMsg = "Importing AI model..."
-            val imported = withContext(Dispatchers.IO) {
+            val importedRes = withContext(Dispatchers.IO) { runCatching {
                 var name = "imported-model.gguf"
                 context.contentResolver.query(uri, null, null, null, null)?.use { c ->
                     val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -456,10 +473,12 @@ fun LocalAiBottomPanel(
                 }
                 MediaScannerConnection.scanFile(context, arrayOf(dst.absolutePath), null, null)
                 dst
-            }
+            } }
             filesTick++
-            onSelectModel(imported.absolutePath)
-            statusMsg = LocalModelManager.tryAutoStartServer(context, imported)
+            importedRes.onSuccess { dst ->
+                onSelectModel(dst.absolutePath)
+                statusMsg = LocalModelManager.tryAutoStartServer(context, dst)
+            }.onFailure { statusMsg = "Import failed: ${it.message}" }
         }
     }
 
@@ -500,6 +519,11 @@ fun LocalAiBottomPanel(
                         if (isActive) {
                             Text("Active", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF81C995))
                         } else {
+                            IconButton(onClick = {
+                                runCatching { file.delete() }
+                                filesTick++
+                                statusMsg = "Deleted ${file.name}"
+                            }) { Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFF28B82)) }
                             Button(
                                 onClick = {
                                     onSelectModel(file.absolutePath)
@@ -561,5 +585,66 @@ fun LocalAiBottomPanel(
                 }
             }
         }
+
+        val toolsPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            scope.launch {
+                statusMsg = "Restoring Developer Tools..."
+                statusMsg = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val rootfs = File(context.filesDir, "runtime/ubuntu").apply { mkdirs() }
+                        val tmp = File(context.cacheDir, "tools-import.tar.gz")
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            tmp.outputStream().use { out -> input.copyTo(out, 1024 * 1024) }
+                        }
+                        val proc = ProcessBuilder("tar", "-xzf", tmp.absolutePath, "-C", rootfs.absolutePath)
+                            .redirectErrorStream(true).start()
+                        val out = proc.inputStream.bufferedReader().readText()
+                        val code = proc.waitFor()
+                        tmp.delete()
+                        if (code == 0) "Developer Tools restored into PRoot!" else "Restore error ($code): $out"
+                    }.getOrElse { "Restore failed: ${it.message}" }
+                }
+            }
+        }
+
+        Surface(shape = cardShape, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Backup & Restore Hub", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("Models stay in Download/MobileHarnessModels. Back up or restore Python, C++ & SDK tools here.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                statusMsg = "Backing up Developer Tools..."
+                                statusMsg = withContext(Dispatchers.IO) {
+                                    runCatching {
+                                        val rootfs = File(context.filesDir, "runtime/ubuntu")
+                                        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "MobileHarnessToolsBackup").apply { mkdirs() }
+                                        val outTar = File(dir, "tools-backup.tar.gz")
+                                        val targets = listOf("opt", "root/.local", "root/.android", "var/cache/apt/archives", "usr/local")
+                                            .filter { File(rootfs, it).exists() }
+                                        if (targets.isEmpty()) return@runCatching "No installed tools found to back up yet."
+                                        val cmd = mutableListOf("tar", "-czf", outTar.absolutePath, "-C", rootfs.absolutePath)
+                                        cmd.addAll(targets)
+                                        val code = ProcessBuilder(cmd).redirectErrorStream(true).start().waitFor()
+                                        MediaScannerConnection.scanFile(context, arrayOf(outTar.absolutePath), null, null)
+                                        if (code == 0) "Tools backed up to Download/MobileHarnessToolsBackup/tools-backup.tar.gz" else "Backup exited with $code"
+                                    }.getOrElse { "Backup failed: ${it.message}" }
+                                }
+                            }
+                        },
+                        shape = pillShape,
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Backup Tools", fontSize = 12.sp) }
+                    Button(
+                        onClick = { toolsPicker.launch(arrayOf("*/*")) },
+                        shape = pillShape,
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Import Tools", fontSize = 12.sp) }
+                }
+            }
+        }
+
     }
 }

@@ -64,11 +64,14 @@ class LocalLlmService : Service() {
                     "-m", modelPath,
                     "--jinja",
                     "--flash-attn", "on",
-                    "--ctx-size", "16384",
+                    "--ctx-size", "12288",
+                    "--parallel", "1",
                     "--cache-type-k", "q8_0",
                     "--cache-type-v", "q8_0",
-                    "--batch-size", "256",
-                    "-t", "4",
+                    "--batch-size", "512",
+                    "--ubatch-size", "512",
+                    "--threads", "4",
+                    "--threads-batch", "6",
                     "--host", "127.0.0.1",
                     "--port", "8080"
                 )

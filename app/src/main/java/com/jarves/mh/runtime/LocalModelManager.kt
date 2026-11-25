@@ -32,6 +32,7 @@ object LocalModelManager {
     private var serverProcess: Process? = null
 
     val presets = listOf(
+        LocalModelPreset("qwen3-1.7b", "Qwen3 1.7B (Ultra-Fast)", false, 3, 1.1, "1.1 GB · 3GB+ RAM", "Fastest 2026 coding & tool model for mobile CPU (~3x faster prefill).", "Qwen3-1.7B-Q4_K_M.gguf", "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"),
         LocalModelPreset("qwen3-4b-2507", "Qwen3 4B Instruct (2507)", false, 4, 2.5, "2.5 GB · 4GB+ RAM", "Fast 2026 4B model with strong tool calling & zero thinking lag.", "Qwen3-4B-Instruct-2507-Q4_K_M.gguf", "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"),
         LocalModelPreset("qwen3.5-4b", "Qwen3.5 4B (Top 8GB Pick)", false, 6, 3.4, "3.4 GB · 6GB+ RAM", "Top-rated 2026 model for 8GB RAM: coding, tool use & reasoning.", "Qwen3.5-4B-Q4_K_M.gguf", "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf"),
         LocalModelPreset("qwen3-8b", "Qwen3 8B", false, 8, 5.0, "5.0 GB · 8GB+ RAM", "High-accuracy 2026 coding & reasoning; close background apps on 8GB.", "Qwen3-8B-Q4_K_M.gguf", "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf"),
@@ -77,7 +78,7 @@ object LocalModelManager {
 
     fun modelsDir(context: Context): File {
         val dl = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "MobileHarnessModels")
-        if (runCatching { dl.mkdirs() || dl.exists() }.getOrDefault(false) && dl.canWrite()) return dl
+        if (android.os.Build.VERSION.SDK_INT < 30 || Environment.isExternalStorageManager()) { if (runCatching { dl.mkdirs() || dl.exists() }.getOrDefault(false) && dl.canWrite()) return dl }
         return File(context.filesDir, "local_models").apply { mkdirs() }
     }
 
