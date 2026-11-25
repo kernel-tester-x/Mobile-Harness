@@ -1650,10 +1650,14 @@ private fun AgentProviderCard(
 
             if (selectedKind == ProviderKind.LOCAL_AI) {
                 LocalAiBottomPanel(
-                    context = context,
-                    provider = state.provider,
-                    onSaveProvider = onSaveProvider,
-                    scope = scope,
+                    context = LocalContext.current,
+                    activeModel = model,
+                    onSelectModel = { path ->
+                        onBaseUrl("http://127.0.0.1:8080/v1")
+                        onDshApi("openai-completions")
+                        onModel(path)
+                    },
+                    scope = rememberCoroutineScope(),
                 )
             } else {
             if (selectedKind != ProviderKind.CLAUDE) {

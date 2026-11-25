@@ -1,7 +1,7 @@
 package com.jarves.mh.ui
 
-import android.app.ActivityManager
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -40,22 +40,92 @@ import com.jarves.mh.runtime.AppLogExporter
 import com.jarves.mh.runtime.LocalLlmService
 import com.jarves.mh.runtime.LocalModelManager
 import com.jarves.mh.runtime.LocalModelPreset
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
 private val cardShape = RoundedCornerShape(20.dp)
 private val pillShape = RoundedCornerShape(50)
 
-private fun totalRamGb(context: Context): Double {
-    val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-    val mi = ActivityManager.MemoryInfo()
-    am.getMemoryInfo(mi)
-    return mi.totalMem / (1024.0 * 1024.0 * 1024.0)
+data class BgDownloadState(
+    val activeId: String? = null,
+    val progressPct: Int = 0,
+    val statusMsg: String = "",
+)
+
+object LocalBgDownloader {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var job: Job? = null
+    private val _state = MutableStateFlow(BgDownloadState())
+    val state = _state.asStateFlow()
+
+    fun cancel() {
+        job?.cancel()
+        job = null
+        _state.value = BgDownloadState(statusMsg = "Download cancelled")
+    }
+
+    fun start(context: Context, url: String, filename: String, id: String, onReady: (File) -> Unit) {
+        job?.cancel()
+        job = scope.launch {
+            val dir = LocalModelManager.modelsDir(context)
+            val part = File(dir, "$filename.part")
+            val finalFile = File(dir, filename)
+            val urls = listOf(url, url.replace("https://huggingface.co/", "https://hf-mirror.com/"))
+            var ok = false
+            for (u in urls) {
+                if (!isActive) break
+                try {
+                    val existing = if (part.exists()) part.length() else 0L
+                    val conn = (URL(u).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 15000
+                        readTimeout = 30000
+                        if (existing > 0) setRequestProperty("Range", "bytes=$existing-")
+                    }
+                    val code = conn.responseCode
+                    val append = code == 206
+                    val total = if (append) existing + conn.contentLengthLong else conn.contentLengthLong
+                    var downloaded = if (append) existing else 0L
+                    conn.inputStream.use { input ->
+                        FileOutputStream(part, append).use { out ->
+                            val buf = ByteArray(1024 * 1024)
+                            var lastUi = 0L
+                            while (isActive) {
+                                val n = input.read(buf)
+                                if (n <= 0) break
+                                out.write(buf, 0, n)
+                                downloaded += n
+                                val now = System.currentTimeMillis()
+                                if (now - lastUi > 350) {
+                                    lastUi = now
+                                    val pct = if (total > 0) ((downloaded * 100) / total).toInt().coerceIn(0, 99) else 0
+                                    _state.value = BgDownloadState(id, pct, "${downloaded / (1024 * 1024)} MB")
+                                }
+                            }
+                        }
+                    }
+                    if (isActive) {
+                        if (finalFile.exists()) finalFile.delete()
+                        part.renameTo(finalFile)
+                        MediaScannerConnection.scanFile(context, arrayOf(finalFile.absolutePath), null, null)
+                        ok = true
+                        break
+                    }
+                } catch (_: Exception) {
+                }
+            }
+            if (ok) {
+                _state.value = BgDownloadState(null, 100, "Saved to Downloads")
+                withContext(Dispatchers.Main) { onReady(finalFile) }
+            } else if (isActive) {
+                _state.value = BgDownloadState(null, 0, "Download failed; tap to retry")
+            }
+        }
+    }
 }
 
 private fun detectQuant(name: String): String {
@@ -83,7 +153,7 @@ private suspend fun probeHealth(): Boolean = withContext(Dispatchers.IO) {
 private fun applyLocalModel(
     context: Context,
     provider: ProviderProfile,
-    onSaveProvider: (ProviderProfile) -> Unit,
+    onSaveProvider: (ProviderProfile, String) -> Unit,
     scope: CoroutineScope,
     file: File,
     onStatus: (String) -> Unit,
@@ -93,9 +163,9 @@ private fun applyLocalModel(
             kind = ProviderKind.LOCAL_AI,
             baseUrl = "http://127.0.0.1:8080/v1",
             model = file.absolutePath,
-            apiKey = "local-offline",
             dshApi = "openai-completions",
-        )
+        ),
+        "local-offline",
     )
     scope.launch { onStatus(LocalModelManager.tryAutoStartServer(context, file)) }
 }
@@ -104,10 +174,10 @@ private fun applyLocalModel(
 fun LocalAiCard(
     context: Context,
     provider: ProviderProfile,
-    onSaveProvider: (ProviderProfile) -> Unit,
+    onSaveProvider: (ProviderProfile, String) -> Unit,
     scope: CoroutineScope,
 ) {
-    val dlState by LocalModelManager.downloadState.collectAsState()
+    val dlState by LocalBgDownloader.state.collectAsState()
     var filter by rememberSaveable { mutableStateOf("All") }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var hfResults by remember { mutableStateOf<List<LocalModelPreset>>(emptyList()) }
@@ -118,7 +188,7 @@ fun LocalAiCard(
     var filesTick by remember { mutableIntStateOf(0) }
     val clipboard = LocalClipboardManager.current
 
-    val ramGb = remember { totalRamGb(context) }
+    val ramGb = remember { LocalModelManager.getTotalRamGb(context) }
     val freeGb = remember(filesTick) { LocalModelManager.getFreeStorageGb(context) }
     val downloadedFiles = remember(filesTick, dlState.activeId, dlState.progressPct) {
         LocalModelManager.listDownloadedModels(context)
@@ -142,6 +212,7 @@ fun LocalAiCard(
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     dst.outputStream().use { output -> input.copyTo(output, 1024 * 1024) }
                 }
+                MediaScannerConnection.scanFile(context, arrayOf(dst.absolutePath), null, null)
                 dst
             }
             filesTick++
@@ -153,7 +224,7 @@ fun LocalAiCard(
         val base = if (hfResults.isNotEmpty()) hfResults else LocalModelManager.presets
         base.filter { m ->
             when (filter) {
-                "Downloaded" -> downloadedFiles.any { it.name.equals(m.file, true) }
+                "Downloaded" -> downloadedFiles.any { it.name.equals(m.filename, true) }
                 "Censored" -> !m.uncensored
                 "Uncensored" -> m.uncensored
                 "Fast 4-6GB" -> m.sizeGb <= 4.0
@@ -269,16 +340,11 @@ fun LocalAiCard(
         }
 
         allModels.forEach { preset ->
-            val targetFile = File(LocalModelManager.modelsDir(context), preset.file)
+            val targetFile = File(LocalModelManager.modelsDir(context), preset.filename)
             val isDownloaded = targetFile.exists() && targetFile.length() > 10_000_000L
             val isDownloading = dlState.activeId == preset.id
             val isExpanded = expandedId == preset.id
-            val compat = LocalModelManager.compatibilityLabel(preset.minRamGb, ramGb)
-            val compatColor = when {
-                compat.startsWith("Compatible") -> Color(0xFF81C995)
-                compat.startsWith("Tight") -> Color(0xFFFDD663)
-                else -> Color(0xFFF28B82)
-            }
+            val (compat, compatArgb) = LocalModelManager.compatibilityLabel(ramGb, preset)
 
             Surface(
                 shape = cardShape,
@@ -305,8 +371,8 @@ fun LocalAiCard(
                                     )
                                 }
                             }
-                            Text(String.format("%.2f GB · %s+ GB RAM · %s", preset.sizeGb, preset.minRamGb, compat), fontSize = 12.sp, color = compatColor)
-                            Text(preset.note, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("${preset.sizeLabel} · $compat", fontSize = 12.sp, color = Color(compatArgb))
+                            Text(preset.reviewNote, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Icon(if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null)
                     }
@@ -315,20 +381,18 @@ fun LocalAiCard(
                         LinearProgressIndicator(progress = { dlState.progressPct / 100f }, modifier = Modifier.fillMaxWidth())
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text("${dlState.progressPct}% · ${dlState.statusMsg}", fontSize = 11.sp, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { LocalModelManager.cancelDownload() }) { Text("Cancel", color = Color(0xFFF28B82)) }
+                            TextButton(onClick = { LocalBgDownloader.cancel() }) { Text("Cancel", color = Color(0xFFF28B82)) }
                         }
                     } else if (isDownloaded) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { applyLocalModel(context, provider, onSaveProvider, scope, targetFile) { localStatusMsg = it } },
-                                shape = pillShape,
-                                modifier = Modifier.weight(1f),
-                            ) { Text("Use Model") }
-                        }
+                        Button(
+                            onClick = { applyLocalModel(context, provider, onSaveProvider, scope, targetFile) { localStatusMsg = it } },
+                            shape = pillShape,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Use Model") }
                     } else {
                         Button(
                             onClick = {
-                                LocalModelManager.startDownloadInBackground(context, preset.url, preset.file, preset.id) { file ->
+                                LocalBgDownloader.start(context, preset.downloadUrl, preset.filename, preset.id) { file ->
                                     filesTick++
                                     applyLocalModel(context, provider, onSaveProvider, scope, file) { localStatusMsg = it }
                                 }
@@ -340,11 +404,11 @@ fun LocalAiCard(
 
                     AnimatedVisibility(visible = isExpanded, enter = fadeIn(tween(150)) + expandVertically(), exit = fadeOut(tween(150)) + shrinkVertically()) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("File: Download/MobileHarnessModels/${preset.file}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("File: Download/MobileHarnessModels/${preset.filename}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (isDownloaded && !isDownloading) {
                                 OutlinedButton(
                                     onClick = {
-                                        LocalModelManager.startDownloadInBackground(context, preset.url, preset.file, preset.id) { file ->
+                                        LocalBgDownloader.start(context, preset.downloadUrl, preset.filename, preset.id) { file ->
                                             filesTick++
                                             applyLocalModel(context, provider, onSaveProvider, scope, file) { localStatusMsg = it }
                                         }
@@ -364,14 +428,14 @@ fun LocalAiCard(
 @Composable
 fun LocalAiBottomPanel(
     context: Context,
-    provider: ProviderProfile,
-    onSaveProvider: (ProviderProfile) -> Unit,
+    activeModel: String,
+    onSelectModel: (String) -> Unit,
     scope: CoroutineScope,
 ) {
     var filesTick by remember { mutableIntStateOf(0) }
     var statusMsg by remember { mutableStateOf("") }
     var serverAlive by remember { mutableStateOf(false) }
-    val ramGb = remember { totalRamGb(context) }
+    val ramGb = remember { LocalModelManager.getTotalRamGb(context) }
     val models = remember(filesTick) { LocalModelManager.listDownloadedModels(context) }
 
     LaunchedEffect(filesTick, statusMsg) { serverAlive = probeHealth() }
@@ -390,10 +454,12 @@ fun LocalAiBottomPanel(
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     dst.outputStream().use { output -> input.copyTo(output, 1024 * 1024) }
                 }
+                MediaScannerConnection.scanFile(context, arrayOf(dst.absolutePath), null, null)
                 dst
             }
             filesTick++
-            applyLocalModel(context, provider, onSaveProvider, scope, imported) { statusMsg = it }
+            onSelectModel(imported.absolutePath)
+            statusMsg = LocalModelManager.tryAutoStartServer(context, imported)
         }
     }
 
@@ -416,7 +482,7 @@ fun LocalAiBottomPanel(
             Text("No downloaded models yet in Download/MobileHarnessModels/", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             models.forEach { file ->
-                val isActive = provider.model == file.absolutePath
+                val isActive = activeModel == file.absolutePath
                 val sizeGb = file.length() / (1024.0 * 1024.0 * 1024.0)
                 val quant = detectQuant(file.name)
                 val fit = ramFitLabel(file.length(), ramGb)
@@ -434,9 +500,13 @@ fun LocalAiBottomPanel(
                         if (isActive) {
                             Text("Active", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF81C995))
                         } else {
-                            Button(onClick = { applyLocalModel(context, provider, onSaveProvider, scope, file) { statusMsg = it } }, shape = pillShape) {
-                                Text("Use")
-                            }
+                            Button(
+                                onClick = {
+                                    onSelectModel(file.absolutePath)
+                                    scope.launch { statusMsg = LocalModelManager.tryAutoStartServer(context, file) }
+                                },
+                                shape = pillShape,
+                            ) { Text("Use") }
                         }
                     }
                 }
@@ -470,8 +540,11 @@ fun LocalAiBottomPanel(
                                 serverAlive = false
                                 statusMsg = "Engine stopped."
                             } else {
-                                val m = models.firstOrNull { it.absolutePath == provider.model } ?: models.firstOrNull()
-                                if (m != null) applyLocalModel(context, provider, onSaveProvider, scope, m) { statusMsg = it }
+                                val m = models.firstOrNull { it.absolutePath == activeModel } ?: models.firstOrNull()
+                                if (m != null) {
+                                    onSelectModel(m.absolutePath)
+                                    scope.launch { statusMsg = LocalModelManager.tryAutoStartServer(context, m) }
+                                }
                             }
                         },
                         shape = pillShape,
