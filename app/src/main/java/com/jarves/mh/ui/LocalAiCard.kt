@@ -222,7 +222,7 @@ fun LocalAiCard(
                 dst
             } }
             filesTick++
-            importedRes.onSuccess { dst -> dst, onStatus = { localStatusMsg = it }) }.onFailure { localStatusMsg = "Import failed: ${it.message}" }
+            importedRes.onSuccess { dst -> applyLocalModel(context, provider, onSaveProvider, scope, dst) { localStatusMsg = it } }.onFailure { localStatusMsg = "Import failed: ${it.message}" }
         }
     }
 
