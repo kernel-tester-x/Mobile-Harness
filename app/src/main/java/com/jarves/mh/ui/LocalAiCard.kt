@@ -622,7 +622,7 @@ fun LocalAiBottomPanel(
                                         val rootfs = File(context.filesDir, "runtime/ubuntu")
                                         val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "MobileHarnessToolsBackup").apply { mkdirs() }
                                         val outTar = File(dir, "tools-backup.tar.gz")
-                                        val targets = listOf("opt", "root/.local", "root/.android", "var/cache/apt/archives", "usr/local")
+                                        val targets = listOf("opt", "root/.local", "root/.android", "var/cache/apt/archives", "usr/local", ".pocket-language-tools-version", ".pocket-core-tools-version", ".pocket-system-upgrade-version", ".pocket-dev-stacks.json")
                                             .filter { File(rootfs, it).exists() }
                                         if (targets.isEmpty()) return@runCatching "No installed tools found to back up yet."
                                         val cmd = mutableListOf("tar", "-czf", outTar.absolutePath, "-C", rootfs.absolutePath)
