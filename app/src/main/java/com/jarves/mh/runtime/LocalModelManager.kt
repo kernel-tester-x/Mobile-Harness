@@ -84,13 +84,11 @@ object LocalModelManager {
     fun listDownloadedModels(context: Context): List<File> =
         modelsDir(context).listFiles()?.filter { it.isFile && it.name.endsWith(".gguf", true) }?.sortedBy { it.name } ?: emptyList()
 
-    suspend fun tryAutoStartServer(context: Context, modelFile: File): String = withContext(Dispatchers.IO) {
+    suspend fun tryAutoStartServer(context: Context, modelFile: File): String  withContext(Dispatchers.IO) {
         return try {
             LocalLlmService.start(context, modelFile.absolutePath)
             "Local AI engine starting automatically! Switch to Chat in ~10s."
-        } catch (e: Exception) {
-            "Local AI auto-start error: ${e.message}"
-        }
+        } catch (e: Exception) { "Local AI error: ${e.message}" }
     }
 
     suspend fun searchHuggingFaceGguf(query: String): List<LocalModelPreset> = withContext(Dispatchers.IO) {
