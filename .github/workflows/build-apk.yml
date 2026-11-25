@@ -14,6 +14,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - name: Restore Permanent Debug Keystore
+        if: ${{ secrets.DEBUG_KEYSTORE_B64 != '' }}
+        run: |
+          mkdir -p ~/.android
+          echo "${{ secrets.DEBUG_KEYSTORE_B64 }}" | base64 -d > ~/.android/debug.keystore
       - name: Install SDK, NDK, and CMake
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
