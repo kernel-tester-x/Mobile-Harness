@@ -46,34 +46,40 @@ fun LocalAiCard(
     scope: CoroutineScope,
 ) {
     val clipboard = LocalClipboardManager.current
-    val dlState by LocalModelManager.downloadState.collectAsState()
     var filterMode by rememberSaveable { mutableStateOf("ALL") }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var hfResults by remember { mutableStateOf<List<LocalModelPreset>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var expandedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var localDownloadPct by remember { mutableStateOf<Int?>(null) }
+    var downloadingId by remember { mutableStateOf<String?>(null) }
     var localStatusMsg by remember { mutableStateOf("") }
     var localServerAlive by remember { mutableStateOf(false) }
+    var localFilesTick by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) { localServerAlive = LocalModelManager.isServerRunning() }
 
-    fun applyModel(file: File) {
+    fun applyAndStart(file: File) {
         onSaveProvider(provider.copy(kind = ProviderKind.LOCAL_AI, baseUrl = "http://127.0.0.1:8080/v1", model = file.name, dshApi = "openai-completions"), "local")
-        clipboard.setText(AnnotatedString(LocalModelManager.recommendedServerCommand(file.absolutePath)))
-        localStatusMsg = "Active & saved in Download/MobileHarnessModels/${file.name}"
+        scope.launch {
+            val msg = LocalModelManager.tryAutoStartServer(context, file)
+            localServerAlive = LocalModelManager.isServerRunning()
+            clipboard.setText(AnnotatedString(LocalModelManager.recommendedServerCommand(file.absolutePath)))
+            localStatusMsg = "$msg (saved in Downloads/MobileHarnessModels)"
+        }
     }
 
     val importGgufLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             runCatching { LocalModelManager.importGguf(context, uri) }
-                .onSuccess { f -> applyModel(f) }
+                .onSuccess { f -> localFilesTick++; applyAndStart(f) }
                 .onFailure { e -> localStatusMsg = e.message ?: "Import failed" }
         }
     }
 
     val ramGb = remember { LocalModelManager.getTotalRamGb(context) }
-    val freeGb = remember(dlState.filesTick) { LocalModelManager.getFreeStorageGb(context) }
-    val downloaded = remember(dlState.filesTick) { LocalModelManager.listDownloadedModels(context) }
+    val freeGb = remember(localFilesTick) { LocalModelManager.getFreeStorageGb(context) }
+    val downloaded = remember(localFilesTick) { LocalModelManager.listDownloadedModels(context) }
     val baseList = if (hfResults.isNotEmpty()) hfResults else LocalModelManager.presets
     val shownModels = when (filterMode) {
         "CENSORED" -> baseList.filter { !it.uncensored }
@@ -123,7 +129,7 @@ fun LocalAiCard(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
             modifier = Modifier.fillMaxWidth().clickable {
                 clipboard.setText(AnnotatedString(LocalModelManager.miBandSkillCommand()))
-                localStatusMsg = "Copied Mi Band 10 (Vela JS) skill cmd"
+                localStatusMsg = "Copied Mi Band 10 (Vela JS) skill cmd — paste inside your Mi Band project Terminal"
             },
         ) {
             Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -167,7 +173,7 @@ fun LocalAiCard(
             val exists = downloaded.any { it.name == preset.filename }
             val (compatText, compatColorInt) = LocalModelManager.compatibilityLabel(ramGb, preset)
             val isExpanded = expandedId == preset.id
-            val isDownloadingThis = dlState.activeId == preset.id
+            val isDownloadingThis = downloadingId == preset.id
 
             Surface(
                 shape = RoundedCornerShape(22.dp),
@@ -197,17 +203,23 @@ fun LocalAiCard(
                     ) {
                         Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Saves to: Download/MobileHarnessModels/${preset.filename}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            if (isDownloadingThis && dlState.progressPct != null) {
-                                LinearProgressIndicator(progress = { (dlState.progressPct ?: 0) / 100f }, modifier = Modifier.fillMaxWidth())
+                            if (isDownloadingThis && localDownloadPct != null) {
+                                LinearProgressIndicator(progress = { (localDownloadPct ?: 0) / 100f }, modifier = Modifier.fillMaxWidth())
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(enabled = dlState.activeId == null, shape = RoundedCornerShape(24.dp), modifier = Modifier.weight(1f), onClick = {
-                                    LocalModelManager.startDownloadInBackground(context, preset) { file -> applyModel(file) }
-                                }) { Text(if (isDownloadingThis) "${dlState.progressPct ?: 0}% (BG)" else if (exists) "Re-download & Use" else "Download & Use") }
+                                OutlinedButton(enabled = localDownloadPct == null, shape = RoundedCornerShape(24.dp), modifier = Modifier.weight(1f), onClick = {
+                                    scope.launch {
+                                        downloadingId = preset.id; localDownloadPct = 0
+                                        runCatching { LocalModelManager.downloadModel(context, preset) { localDownloadPct = it } }
+                                            .onSuccess { f -> localFilesTick++; applyAndStart(f) }
+                                            .onFailure { localStatusMsg = it.message ?: "Download failed" }
+                                        localDownloadPct = null; downloadingId = null
+                                    }
+                                }) { Text(if (isDownloadingThis) "${localDownloadPct ?: 0}%" else if (exists) "Re-download & Use" else "Download & Use") }
 
                                 if (exists) {
                                     Button(shape = RoundedCornerShape(24.dp), modifier = Modifier.weight(1f), onClick = {
-                                        applyModel(downloaded.first { it.name == preset.filename })
+                                        applyAndStart(downloaded.first { it.name == preset.filename })
                                     }) { Text("Use Model") }
                                 }
                             }
@@ -226,13 +238,12 @@ fun LocalAiCard(
                             Text(file.name, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                             Text(String.format("%.2f GB", file.length() / (1024.0 * 1024.0 * 1024.0)), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        TextButton(onClick = { applyModel(file) }) { Text("Use") }
+                        TextButton(onClick = { applyAndStart(file) }) { Text("Use") }
                     }
                 }
             }
         }
 
-        val status = dlState.statusMsg.ifBlank { localStatusMsg }
-        if (status.isNotEmpty()) Text(status, fontSize = 12.sp, color = accentBlue)
+        if (localStatusMsg.isNotEmpty()) Text(localStatusMsg, fontSize = 12.sp, color = accentBlue)
     }
 }
