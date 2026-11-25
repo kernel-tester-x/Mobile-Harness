@@ -84,5 +84,9 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+            <service
+            android:name="com.jarves.mh.runtime.LocalLlmService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>

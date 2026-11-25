@@ -85,24 +85,12 @@ object LocalModelManager {
         modelsDir(context).listFiles()?.filter { it.isFile && it.name.endsWith(".gguf", true) }?.sortedBy { it.name } ?: emptyList()
 
     suspend fun tryAutoStartServer(context: Context, modelFile: File): String = withContext(Dispatchers.IO) {
-        if (isServerRunning()) return@withContext "Server already running on 127.0.0.1:8080"
-        val prootBins = listOf(
-            File(context.filesDir, "rootfs/root/llama.cpp/build/bin/llama-server"),
-            File(context.filesDir, "ubuntu/root/llama.cpp/build/bin/llama-server"),
-            File(context.filesDir, "llama-server"),
-        )
-        val bin = prootBins.firstOrNull { it.exists() && it.canExecute() }
-            ?: return@withContext "Model active! Tap Build Engine once in Terminal to compile llama-server."
-        runCatching {
-            serverProcess?.destroy()
-            serverProcess = ProcessBuilder(
-                bin.absolutePath, "-m", modelFile.absolutePath,
-                "--jinja", "--flash-attn", "--ctx-size", "4096",
-                "--batch-size", "256", "-t", recommendedThreads().toString(),
-                "--host", "127.0.0.1", "--port", "8080",
-            ).redirectErrorStream(true).start()
-            "Local AI started automatically on 127.0.0.1:8080"
-        }.getOrElse { "Saved & applied; run server cmd in Terminal if needed." }
+        return try {
+            LocalLlmService.start(context, modelFile.absolutePath)
+            "Local AI engine starting automatically! Switch to Chat in ~10s."
+        } catch (e: Exception) {
+            "Local AI auto-start error: ${e.message}"
+        }
     }
 
     suspend fun searchHuggingFaceGguf(query: String): List<LocalModelPreset> = withContext(Dispatchers.IO) {
