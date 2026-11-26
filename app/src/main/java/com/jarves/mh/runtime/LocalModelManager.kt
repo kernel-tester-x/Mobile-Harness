@@ -73,7 +73,7 @@ object LocalModelManager {
     }
 
     fun miBandSkillCommand(): String =
-        "mkdir -p .claude/skills && git clone https://github.com/Aser-Mohamed/Vela-JS-Skill .claude/skills/vela-js && git clone https://github.com/Sucharek233/MiBand-DevBox-Android .claude/skills/miband-devbox"
+        "mkdir -p .claude/skills && rm -rf /tmp/vela-js-tmp && git clone --depth 1 https://github.com/Aser-Mohamed/Vela-JS-Skill.git /tmp/vela-js-tmp && cp -r /tmp/vela-js-tmp/skills/vela-js-skill .claude/skills/vela-js-skill && rm -rf /tmp/vela-js-tmp && git clone --depth 1 https://github.com/Sucharek233/MiBand-DevBox-Android.git .claude/skills/miband-devbox"
 
     fun recommendedServerCommand(modelPath: String): String =
         "~/llama.cpp/build/bin/llama-server -m $modelPath --jinja --flash-attn --ctx-size 4096 --batch-size 256 -t ${recommendedThreads()} --host 127.0.0.1 --port 8080"
