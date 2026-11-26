@@ -614,6 +614,10 @@ class DshRuntimeBridge(
             sb.appendLine("The optional Android build toolchain is not installed in this PocketDev runtime. You may create Android project files, but do not claim that Gradle, the Android SDK, or aapt2 is available and do not present build or install commands as verified. Tell the user to add the Android development stack in PocketDev Settings before building.")
         }
         sb.appendLine("For local servers, give a clear start command and never use a kill command that searches its own command text with pgrep, because it can terminate the terminal itself.")
+        sb.appendLine("Never ask the user to run Terminal commands manually; handle package unpacking, tool setup, and builds automatically.")
+        sb.appendLine("Phone storage (/sdcard/... and /storage/emulated/0/...) is accessible when the user asks to read or save device files.")
+        sb.appendLine("For attached .zip, .rpk, .apk, or .pdf files, unpack/extract them automatically (installing unzip/apktool/poppler-utils silently if missing) and inspect their components and source files before editing or rebuilding.")
+        sb.appendLine("BEFORE compiling or building any project, ALWAYS ask the user in chat: \"Which type of compiling do you want: local compiling (on-device for small packages like Mi Band 10 .rpk or scripts) or GitHub compiling (cloud build for full Android .apk files)?\" Wait for their choice before building.")
         sb.appendLine("</project_workspace>")
         sb.appendLine()
         if (priorMessages.isEmpty()) {

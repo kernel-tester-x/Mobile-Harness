@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileInputStream
+import java.util.zip.ZipInputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -17,7 +19,7 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
 <tool>{"name":"list_files","path":"."}</tool>
 <tool>{"name":"read_file","path":"file.txt"}</tool>
 <tool>{"name":"write_file","path":"file.txt","content":"..."}</tool>
-<tool>{"name":"run_command","cmd":"python3 --version"}</tool>"""
+<tool>{"name":"inspect_package(path) to unpack/read .zip, .rpk, .apk, or .pdf files, and run_command","cmd":"python3 --version"}</tool>"""
 
     suspend fun runSession(
         sessionId: String,
@@ -92,6 +94,10 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
     }
 
     private fun resolvePath(workspace: File, raw: String): File {
+        val trimmed = rawPath.trim()
+        if (trimmed.startsWith("/sdcard/") || trimmed.startsWith("/storage/emulated/0/") || trimmed == "/sdcard" || trimmed == "/storage/emulated/0") {
+            return File(trimmed)
+        }
         var rel = raw.trim()
         rel = rel.replace(Regex("^/workspace/[^/]+/?"), "").replace(Regex("^/workspace/?"), "")
         rel = rel.removePrefix("/").ifBlank { "." }
@@ -113,6 +119,7 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
                         if (it.isDirectory) "[dir] $rel" else "$rel (${it.length()} bytes)"
                     }
                 }
+                "inspect_package" -> inspectPackageFile(installer, projectDir, args.optString("path"))
                 "read_file" -> {
                     val f = resolvePath(workspace, args.optString("path"))
                     if (!f.exists() || !f.isFile) return "File not found"
@@ -191,4 +198,47 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
         }
         return full.toString()
     }
+
+    private fun inspectPackageFile(installer: RuntimeInstaller, projectDir: File, rawPath: String): String {
+        val target = resolvePath(projectDir, rawPath)
+        if (!target.exists() || !target.isFile) return "File not found: ${target.absolutePath}"
+        val lower = target.name.lowercase()
+        val outDir = File(projectDir, ".unpacked/${target.nameWithoutExtension}")
+        outDir.deleteRecursively()
+        outDir.mkdirs()
+
+        val env = mapOf("HOME" to "/root", "TMPDIR" to "/tmp", "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "LANG" to "C.UTF-8")
+
+        if (lower.endsWith(".pdf")) {
+            val txtOut = File(outDir, "${target.nameWithoutExtension}.txt")
+            val rt = installer.installedRuntime()
+            installer.process(rt.proot, rt.rootfs, projectDir, env, listOf("sh", "-c", "command -v pdftotext >/dev/null || (apt-get update -qq && apt-get -y -o Dpkg::Options::=--force-confold install -y -qq poppler-utils >/dev/null 2>&1); pdftotext \"${target.absolutePath}\" \"${txtOut.absolutePath}\""), "/workspace").waitFor()
+            return if (txtOut.exists()) "PDF extracted to ${txtOut.absolutePath}\n\n" + txtOut.readText().take(12000) else "Could not extract PDF text."
+        }
+
+        if (lower.endsWith(".apk")) {
+            val rt = installer.installedRuntime()
+            installer.process(rt.proot, rt.rootfs, projectDir, env, listOf("sh", "-c", "command -v apktool >/dev/null || (apt-get update -qq && apt-get -y -o Dpkg::Options::=--force-confold install -y -qq apktool >/dev/null 2>&1); command -v apktool >/dev/null && apktool d -f -o \"${outDir.absolutePath}\" \"${target.absolutePath}\""), "/workspace").waitFor()
+        }
+
+        if (outDir.listFiles().isNullOrEmpty()) {
+            ZipInputStream(FileInputStream(target)).use { zis ->
+                var entry = zis.nextEntry
+                while (entry != null) {
+                    val outFile = File(outDir, entry.name)
+                    if (outFile.canonicalPath.startsWith(outDir.canonicalPath)) {
+                        if (entry.isDirectory) outFile.mkdirs() else {
+                            outFile.parentFile?.mkdirs()
+                            outFile.outputStream().use { zis.copyTo(it) }
+                        }
+                    }
+                    entry = zis.nextEntry
+                }
+            }
+        }
+
+        val files = outDir.walkTopDown().filter { it.isFile }.map { it.relativeTo(projectDir).path }.take(120).toList()
+        return "Unpacked ${target.name} into ${outDir.relativeTo(projectDir).path} (${files.size} files shown):\n" + files.joinToString("\n")
+    }
+
 }
