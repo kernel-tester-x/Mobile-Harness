@@ -183,7 +183,7 @@ internal class LocalFormatGateway(
         return try {
             connection.requestMethod = "POST"
             connection.connectTimeout = 20_000
-            connection.readTimeout = 180_000
+            connection.readTimeout = 30 * 60 * 1000
             connection.doOutput = true
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Authorization", "Bearer $apiKey")

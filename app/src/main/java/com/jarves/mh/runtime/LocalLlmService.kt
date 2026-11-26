@@ -68,10 +68,11 @@ class LocalLlmService : Service() {
                     "--parallel", "1",
                     "--cache-type-k", "q8_0",
                     "--cache-type-v", "q8_0",
-                    "--batch-size", "512",
-                    "--ubatch-size", "512",
+                    "--batch-size", "256",
+                    "--ubatch-size", "256",
                     "--threads", "4",
-                    "--threads-batch", "6",
+                    "--threads-batch", "4",
+                    "--reasoning-budget", "0",
                     "--host", "127.0.0.1",
                     "--port", "8080"
                 )

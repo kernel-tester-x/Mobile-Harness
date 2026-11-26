@@ -286,13 +286,15 @@ fun LocalAiCard(
                         color = if (serverAlive) Color(0xFFF28B82) else Color(0xFF81C995),
                     )
                     Text(
-                        if (serverAlive) "127.0.0.1:8080 · 16K q8_0" else "Tap to start local server",
+                        if (serverAlive) "127.0.0.1:8080 · 12K q8_0" else "Tap to start local server",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
         }
+
+        LocalChatCard(scope = scope, engineOnline = serverAlive)
 
         Surface(
             shape = cardShape,
@@ -541,7 +543,7 @@ fun LocalAiBottomPanel(
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Local Engine & Diagnostics", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Text(
-                    "Status: ${if (serverAlive) "Online (127.0.0.1:8080)" else "Stopped"} · Context: 16384 (q8_0) · Threads: 4",
+                    "Status: ${if (serverAlive) "Online (127.0.0.1:8080)" else "Stopped"} · Context: 12288 (q8_0) · Threads: 4",
                     fontSize = 11.sp,
                     color = if (serverAlive) Color(0xFF81C995) else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
