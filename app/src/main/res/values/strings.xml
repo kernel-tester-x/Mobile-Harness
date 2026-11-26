@@ -226,7 +226,7 @@
     <string name="provider_subtitle_opencode">Models through the OpenCode Zen gateway</string>
     <string name="provider_subtitle_nvidia">OpenAI-compatible models hosted by NVIDIA</string>
     <string name="provider_gateway_protocol">Gateway protocol</string>
-    <string name="provider_gateway_protocol_help">Pick the protocol your gateway speaks; DeepSeek Harness routes it directly.</string>
+    <string name="provider_gateway_protocol_help">Pick the protocol your gateway speaks; MH AI routes it directly.</string>
     <string name="provider_models_found">Found %1$d available models.</string>
     <string name="provider_available_models">Available models</string>
     <string name="provider_models_count">%1$d of %2$d models</string>
@@ -235,7 +235,7 @@
     <string name="provider_no_matching_models">No matching models</string>
     <string name="provider_free"> FREE</string>
     <string name="provider_encrypted_locally">Encrypted locally</string>
-    <string name="provider_endpoint_deepseek">DeepSeek Harness will connect through this API endpoint.</string>
+    <string name="provider_endpoint_deepseek">MH AI will connect through this API endpoint.</string>
     <string name="provider_endpoint_translate">Mobile Harness will translate Claude Code requests for this provider.</string>
     <string name="provider_endpoint_claude">Claude Code will connect through this API endpoint.</string>
     <string name="provider_fixed_by">Fixed by %1$s</string>
@@ -260,7 +260,7 @@
     <string name="agent_choose_desc">Switch if the current service is unavailable. Your existing login and credentials stay saved.</string>
     <string name="agent_recommended">Recommended</string>
     <string name="agent_title_claude">Claude Code</string>
-    <string name="agent_title_deepseek">DeepSeek Harness</string>
+    <string name="agent_title_deepseek">MH AI</string>
     <string name="agent_title_antigravity">Antigravity CLI</string>
     <string name="agent_subtitle_claude">Anthropic’s coding agent · broad provider support</string>
     <string name="agent_subtitle_deepseek">Official DeepSeek coding agent · API-key providers</string>

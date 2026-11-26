@@ -286,7 +286,7 @@ fun LocalAiCard(
                         color = if (serverAlive) Color(0xFFF28B82) else Color(0xFF81C995),
                     )
                     Text(
-                        if (serverAlive) "127.0.0.1:8080 · 12K q8_0" else "Tap to start local server",
+                        if (serverAlive) "127.0.0.1:8080 · 12K q8_0" else "Tap to start offline AI",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -490,7 +490,7 @@ fun LocalAiBottomPanel(
         Surface(shape = cardShape, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp)) {
                 Text("Local Server", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                Text("http://127.0.0.1:8080/v1 · Offline · OpenAI-compatible", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Private on-device engine · Works without internet", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
@@ -543,7 +543,7 @@ fun LocalAiBottomPanel(
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Local Engine & Diagnostics", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Text(
-                    "Status: ${if (serverAlive) "Online (127.0.0.1:8080)" else "Stopped"} · Context: 12288 (q8_0) · Threads: 4",
+                    "Status: ${if (serverAlive) "Running" else "Stopped"} · Context: 12288 (q8_0) · Threads: 4",
                     fontSize = 11.sp,
                     color = if (serverAlive) Color(0xFF81C995) else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -553,7 +553,7 @@ fun LocalAiBottomPanel(
                             scope.launch {
                                 val ok = probeHealth()
                                 serverAlive = ok
-                                statusMsg = if (ok) "127.0.0.1:8080/health OK!" else "Engine not responding on 8080."
+                                statusMsg = if (ok) "Offline AI is ready!" else "Offline AI is not running yet."
                             }
                         },
                         shape = pillShape,

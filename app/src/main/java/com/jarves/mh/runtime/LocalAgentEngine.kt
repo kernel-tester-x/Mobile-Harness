@@ -94,7 +94,7 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
     }
 
     private fun resolvePath(workspace: File, raw: String): File {
-        val trimmed = rawPath.trim()
+        val trimmed = raw.trim()
         if (trimmed.startsWith("/sdcard/") || trimmed.startsWith("/storage/emulated/0/") || trimmed == "/sdcard" || trimmed == "/storage/emulated/0") {
             return File(trimmed)
         }
@@ -119,7 +119,7 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
                         if (it.isDirectory) "[dir] $rel" else "$rel (${it.length()} bytes)"
                     }
                 }
-                "inspect_package" -> inspectPackageFile(installer, projectDir, args.optString("path"))
+                "inspect_package" -> inspectPackageFile(installer, workspace, args.optString("path"))
                 "read_file" -> {
                     val f = resolvePath(workspace, args.optString("path"))
                     if (!f.exists() || !f.isFile) return "File not found"

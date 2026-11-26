@@ -67,12 +67,21 @@ class LocalLlmService : Service() {
                 process = null
                 val bin = File(applicationInfo.nativeLibraryDir, "libllama_server.so")
                 val logFile = File(filesDir, "llama-server.log")
+                val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                val mi = android.app.ActivityManager.MemoryInfo()
+                am.getMemoryInfo(mi)
+                val totalGb = mi.totalMem / (1024.0 * 1024.0 * 1024.0)
+                val adaptiveCtx = when {
+                    totalGb >= 7.0 -> "12288"
+                    totalGb >= 5.0 -> "8192"
+                    else -> "4096"
+                }
                 val pb = ProcessBuilder(
                     bin.absolutePath,
                     "-m", modelPath,
                     "--jinja",
                     "--flash-attn", "on",
-                    "--ctx-size", "12288",
+                    "--ctx-size", adaptiveCtx,
                     "--parallel", "1",
                     "--cache-type-k", "q8_0",
                     "--cache-type-v", "q8_0",
@@ -93,6 +102,17 @@ class LocalLlmService : Service() {
         }.start()
 
         return START_STICKY
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_RUNNING_CRITICAL) {
+            process?.destroyForcibly()
+            process = null
+            File(filesDir, "llama-server.log").appendText("\nAuto-offloaded model due to low system RAM (level=$level)\n")
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
     }
 
     override fun onDestroy() {
@@ -122,7 +142,7 @@ class LocalLlmService : Service() {
             Notification.Builder(this)
         }
         return builder
-            .setContentTitle("Mobile Harness Local AI")
+            .setContentTitle("MH Local AI")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setOngoing(true)
