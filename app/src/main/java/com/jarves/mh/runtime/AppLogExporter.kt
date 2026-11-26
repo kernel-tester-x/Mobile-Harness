@@ -51,6 +51,9 @@ object AppLogExporter {
             val llamaLog = File(context.filesDir, "llama-server.log")
             sb.appendLine(if (llamaLog.exists()) llamaLog.readText().takeLast(20000) else "(not created yet)")
 
+            sb.appendLine("\n=== LOCAL-AGENT.LOG ===")
+            val agLog = File(context.filesDir, "local-agent.log")
+            sb.appendLine(if (agLog.exists()) agLog.readText().takeLast(8000) else "(none)")
             sb.appendLine("\n=== ANDROID LOGCAT (LAST 500 LINES) ===")
             val logcat = runCatching {
                 ProcessBuilder("logcat", "-d", "-t", "500").redirectErrorStream(true).start()

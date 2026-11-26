@@ -10,13 +10,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object LocalAgentEngine {
-    private const val SYSTEM_PROMPT = """You are Local AI running offline on the user's phone inside a coding workspace.
+    private const val SYSTEM_PROMPT = """[System Instructions]
+You are Local AI running offline on the user's phone inside a coding workspace.
 For normal questions, answer directly and concisely.
 Paths are relative to the workspace root ('.' or 'attachments'). To inspect files, edit files, or run build/Python/C++/Git commands, output ONE tool block:
 <tool>{"name":"list_files","path":"."}</tool>
 <tool>{"name":"read_file","path":"file.txt"}</tool>
 <tool>{"name":"write_file","path":"file.txt","content":"..."}</tool>
-<tool>{"name":"run_command","cmd":"ls -la"}</tool>"""
+<tool>{"name":"run_command","cmd":"python3 --version"}</tool>"""
 
     suspend fun runSession(
         sessionId: String,
@@ -27,6 +28,7 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
         eventBus: MutableSharedFlow<RuntimeEvent>,
         isStopped: () -> Boolean,
     ) {
+        val logFile = File(workspace.parentFile?.parentFile ?: workspace, "local-agent.log")
         val alive = runCatching {
             val c = URL("http://127.0.0.1:8080/health").openConnection() as HttpURLConnection
             c.connectTimeout = 1000
@@ -39,16 +41,18 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
             return
         }
 
-        val msgs = JSONArray().put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT))
+        val raw = mutableListOf<Pair<String, String>>()
         history.takeLast(6).forEach { m ->
             val r = if (m.toString().let { it.contains("USER", true) || it.contains("isUser=true", true) || it.contains("fromUser=true", true) }) "user" else "assistant"
-            if (m.text.isNotBlank()) msgs.put(JSONObject().put("role", r).put("content", m.text.take(1500)))
+            if (m.text.isNotBlank()) raw += r to m.text.take(1500)
         }
-        msgs.put(JSONObject().put("role", "user").put("content", prompt))
+        raw += "user" to prompt
+
+        val msgs = buildAlternatingMessages(raw)
 
         for (step in 0 until 6) {
             if (isStopped()) break
-            val reply = callServer(msgs, isStopped)
+            val reply = callServer(msgs, logFile, isStopped)
             val m = Regex("<tool>(\\{[\\s\\S]*?\\})</tool>").find(reply)
             val visible = reply.replace(Regex("<tool>[\\s\\S]*?</tool>"), "").trim()
             if (visible.isNotEmpty()) {
@@ -66,6 +70,25 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
             msgs.put(JSONObject().put("role", "assistant").put("content", reply))
             msgs.put(JSONObject().put("role", "user").put("content", "Tool result ($toolName):\n${result.take(4000)}"))
         }
+    }
+
+    private fun buildAlternatingMessages(raw: List<Pair<String, String>>): JSONArray {
+        val merged = mutableListOf<Pair<String, String>>()
+        for ((role, text) in raw) {
+            if (merged.isEmpty() && role == "assistant") continue
+            if (merged.isNotEmpty() && merged.last().first == role) {
+                val prev = merged.removeAt(merged.lastIndex)
+                merged += role to "${prev.second}\n\n$text"
+            } else {
+                merged += role to text
+            }
+        }
+        if (merged.isEmpty()) merged += "user" to "hi"
+        val first = merged[0]
+        merged[0] = "user" to "$SYSTEM_PROMPT\n\n${first.second}"
+        val arr = JSONArray()
+        merged.forEach { (r, t) -> arr.put(JSONObject().put("role", r).put("content", t)) }
+        return arr
     }
 
     private fun resolvePath(workspace: File, raw: String): File {
@@ -104,8 +127,14 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
                 "run_command" -> {
                     val cmd = args.optString("cmd")
                     val installed = runCatching { installer.installedRuntime() }.getOrNull()
+                    val env = mapOf(
+                        "HOME" to "/root",
+                        "TMPDIR" to "/tmp",
+                        "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                        "LANG" to "C.UTF-8",
+                    )
                     val proc = if (installed != null && installed.proot.canExecute() && installed.rootfs.exists()) {
-                        installer.process(installed.proot, installed.rootfs, workspace, emptyMap(), listOf("sh", "-c", cmd))
+                        installer.process(installed.proot, installed.rootfs, workspace, env, listOf("/bin/sh", "-c", cmd))
                     } else {
                         ProcessBuilder("sh", "-c", cmd).directory(workspace).redirectErrorStream(true).start()
                     }
@@ -118,7 +147,7 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
         }.getOrElse { "Tool error: ${it.message}" }
     }
 
-    private fun callServer(messages: JSONArray, isStopped: () -> Boolean): String {
+    private fun callServer(messages: JSONArray, logFile: File, isStopped: () -> Boolean): String {
         val body = JSONObject()
             .put("model", "local")
             .put("stream", true)
@@ -140,7 +169,9 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
         try {
             conn.outputStream.use { it.write(body.toString().toByteArray()) }
             if (conn.responseCode !in 200..299) {
-                error("HTTP ${conn.responseCode}: ${conn.errorStream?.bufferedReader()?.readText().orEmpty().take(300)}")
+                val err = conn.errorStream?.bufferedReader()?.readText().orEmpty().take(300)
+                runCatching { logFile.appendText("HTTP ${conn.responseCode}: $err\n") }
+                error("HTTP ${conn.responseCode}: $err")
             }
             conn.inputStream.bufferedReader().use { reader ->
                 while (!isStopped()) {
