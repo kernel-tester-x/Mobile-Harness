@@ -461,6 +461,12 @@ fun LocalAiBottomPanel(
     var filesTick by remember { mutableIntStateOf(0) }
     var statusMsg by remember { mutableStateOf("") }
     var serverAlive by remember { mutableStateOf(false) }
+    val startInteraction = remember { MutableInteractionSource() }
+    val startPressed by startInteraction.collectIsPressedAsState()
+    val startScale by animateFloatAsState(if (startPressed) 0.97f else 1f, spring(stiffness = Spring.StiffnessHigh), label = "startScale")
+    val selectInteraction = remember { MutableInteractionSource() }
+    val selectPressed by selectInteraction.collectIsPressedAsState()
+    val selectScale by animateFloatAsState(if (selectPressed) 0.97f else 1f, spring(stiffness = Spring.StiffnessHigh), label = "selectScale")
     val ramGb = remember { LocalModelManager.getTotalRamGb(context) }
     val models = remember(filesTick) { LocalModelManager.listDownloadedModels(context) }
 
