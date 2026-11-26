@@ -12,11 +12,11 @@ import java.net.URL
 object LocalAgentEngine {
     private const val SYSTEM_PROMPT = """You are Local AI running offline on the user's phone inside a coding workspace.
 For normal questions, answer directly and concisely.
-When you need to inspect files, edit files, or run build/Python/C++/Git commands in the workspace, output ONE XML tool block and wait for the result:
+Paths are relative to the workspace root ('.' or 'attachments'). To inspect files, edit files, or run build/Python/C++/Git commands, output ONE tool block:
 <tool>{"name":"list_files","path":"."}</tool>
 <tool>{"name":"read_file","path":"file.txt"}</tool>
 <tool>{"name":"write_file","path":"file.txt","content":"..."}</tool>
-<tool>{"name":"run_command","cmd":"python3 --version"}</tool>"""
+<tool>{"name":"run_command","cmd":"ls -la"}</tool>"""
 
     suspend fun runSession(
         sessionId: String,
@@ -48,12 +48,12 @@ When you need to inspect files, edit files, or run build/Python/C++/Git commands
 
         for (step in 0 until 6) {
             if (isStopped()) break
-            val reply = callServer(msgs, isStopped) { delta ->
-                if (!delta.contains("<tool>")) {
-                    eventBus.emit(RuntimeEvent.AssistantDelta(sessionId, delta))
-                }
-            }
+            val reply = callServer(msgs, isStopped)
             val m = Regex("<tool>(\\{[\\s\\S]*?\\})</tool>").find(reply)
+            val visible = reply.replace(Regex("<tool>[\\s\\S]*?</tool>"), "").trim()
+            if (visible.isNotEmpty()) {
+                eventBus.emit(RuntimeEvent.AssistantDelta(sessionId, visible + if (m != null) "\n" else ""))
+            }
             if (m == null) break
 
             val json = runCatching { JSONObject(m.groupValues[1]) }.getOrNull() ?: break
@@ -68,28 +68,38 @@ When you need to inspect files, edit files, or run build/Python/C++/Git commands
         }
     }
 
+    private fun resolvePath(workspace: File, raw: String): File {
+        var rel = raw.trim()
+        rel = rel.replace(Regex("^/workspace/[^/]+/?"), "").replace(Regex("^/workspace/?"), "")
+        rel = rel.removePrefix("/").ifBlank { "." }
+        val f = File(workspace, rel).canonicalFile
+        if (!f.path.startsWith(workspace.canonicalPath)) error("Access denied: $raw")
+        return f
+    }
+
     private fun executeTool(name: String, args: JSONObject, workspace: File, installer: RuntimeInstaller): String {
         return runCatching {
             when (name) {
                 "list_files" -> {
-                    val rel = args.optString("path", ".").removePrefix("/")
-                    val dir = File(workspace, rel).canonicalFile
-                    if (!dir.path.startsWith(workspace.canonicalPath)) return "Access denied"
-                    dir.listFiles()?.sortedBy { it.name }?.take(100)
-                        ?.joinToString("\n") { (if (it.isDirectory) "[dir] " else "") + it.name }
-                        ?: "(empty)"
+                    val target = resolvePath(workspace, args.optString("path", "."))
+                    if (!target.exists()) return "Not found: ${target.name}"
+                    if (target.isFile) return "FILE: ${target.name} (${target.length()} bytes)"
+                    val items = target.walkTopDown().maxDepth(3).filter { it != target }.take(80).toList()
+                    if (items.isEmpty()) "(empty)" else items.joinToString("\n") {
+                        val rel = it.relativeTo(workspace).path
+                        if (it.isDirectory) "[dir] $rel" else "$rel (${it.length()} bytes)"
+                    }
                 }
                 "read_file" -> {
-                    val f = File(workspace, args.optString("path").removePrefix("/")).canonicalFile
-                    if (!f.path.startsWith(workspace.canonicalPath) || !f.exists()) return "File not found"
+                    val f = resolvePath(workspace, args.optString("path"))
+                    if (!f.exists() || !f.isFile) return "File not found"
                     f.readText().take(8000)
                 }
                 "write_file" -> {
-                    val f = File(workspace, args.optString("path").removePrefix("/")).canonicalFile
-                    if (!f.path.startsWith(workspace.canonicalPath)) return "Access denied"
+                    val f = resolvePath(workspace, args.optString("path"))
                     f.parentFile?.mkdirs()
                     f.writeText(args.optString("content"))
-                    "Wrote ${f.name} (${f.length()} bytes)"
+                    "Wrote ${f.relativeTo(workspace).path} (${f.length()} bytes)"
                 }
                 "run_command" -> {
                     val cmd = args.optString("cmd")
@@ -108,7 +118,7 @@ When you need to inspect files, edit files, or run build/Python/C++/Git commands
         }.getOrElse { "Tool error: ${it.message}" }
     }
 
-    private suspend fun callServer(messages: JSONArray, isStopped: () -> Boolean, onDelta: suspend (String) -> Unit): String {
+    private fun callServer(messages: JSONArray, isStopped: () -> Boolean): String {
         val body = JSONObject()
             .put("model", "local")
             .put("stream", true)
@@ -141,11 +151,8 @@ When you need to inspect files, edit files, or run build/Python/C++/Git commands
                     val delta = runCatching {
                         JSONObject(data).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta")
                     }.getOrNull() ?: continue
-                    val piece = delta.optString("content", "")
-                    if (piece.isNotEmpty()) {
-                        full.append(piece)
-                        onDelta(piece)
-                    }
+                    val piece = if (delta.isNull("content")) "" else delta.optString("content", "")
+                    if (piece.isNotEmpty()) full.append(piece)
                 }
             }
         } finally {

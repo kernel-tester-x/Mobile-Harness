@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -71,3 +74,10 @@ jobs:
         with:
           name: app-online-debug
           path: app/build/outputs/apk/online/debug/app-online-debug.apk
+
+      - name: Publish Direct APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes || true
+          gh release create latest app/build/outputs/apk/online/debug/app-online-debug.apk --title "MH Local Latest" --notes "Direct APK build #${{ github.run_number }}" --clobber || gh release upload latest app/build/outputs/apk/online/debug/app-online-debug.apk --clobber
