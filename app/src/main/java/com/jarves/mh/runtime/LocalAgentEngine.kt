@@ -1,6 +1,7 @@
 package com.jarves.mh.runtime
 
 import com.jarves.mh.model.ChatMessage
+import com.jarves.mh.model.RuntimeEvent
 import kotlinx.coroutines.flow.MutableSharedFlow
 import org.json.JSONArray
 import org.json.JSONObject
@@ -40,7 +41,7 @@ When you need to inspect files, edit files, or run build/Python/C++/Git commands
 
         val msgs = JSONArray().put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT))
         history.takeLast(6).forEach { m ->
-            val r = if (m.role.name.lowercase().contains("user")) "user" else "assistant"
+            val r = if (m.toString().let { it.contains("USER", true) || it.contains("isUser=true", true) || it.contains("fromUser=true", true) }) "user" else "assistant"
             if (m.text.isNotBlank()) msgs.put(JSONObject().put("role", r).put("content", m.text.take(1500)))
         }
         msgs.put(JSONObject().put("role", "user").put("content", prompt))
