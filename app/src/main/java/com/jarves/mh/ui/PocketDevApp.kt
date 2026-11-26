@@ -322,24 +322,11 @@ fun PocketDevApp(viewModel: MainViewModel = viewModel()) {
                 onSelectLanguage = viewModel::setLanguage,
                 onContinue = viewModel::finishInitialLanguageSetup,
             )
-        !state.backgroundSetupComplete && state.startupStage == StartupStage.SETUP_REQUIRED ->
-            BackgroundTaskSetupScreen(
-                currentLanguageCode = state.languageCode,
-                onSetLanguage = viewModel::setLanguage,
-                themeMode = state.themeMode,
-                onToggleTheme = viewModel::toggleTheme,
-                onContinue = viewModel::finishBackgroundSetup,
-            )
-        state.startupStage == StartupStage.SETUP_REQUIRED -> RuntimeSetupPromptScreen(
-            selectedStacks = state.selectedDevStacks,
-            selectedAgent = state.agentKind,
-            themeMode = state.themeMode,
-            currentLanguageCode = state.languageCode,
-            onSetLanguage = viewModel::setLanguage,
-            onToggleTheme = viewModel::toggleTheme,
-            onToggleStack = viewModel::toggleDevStack,
-            onSelectAgent = viewModel::selectAgent,
-            onDownload = viewModel::startRuntimeSetup,
+        state.startupStage == StartupStage.SETUP_REQUIRED -> PermissionsSetupScreen(
+            onContinue = {
+                viewModel.finishBackgroundSetup()
+                viewModel.skipOnboarding()
+            },
         )
         state.startupStage == StartupStage.INSTALLING && state.showDetailedSetupProgress ->
             RuntimeInstallationScreen(
@@ -361,32 +348,11 @@ fun PocketDevApp(viewModel: MainViewModel = viewModel()) {
             onToggleTheme = viewModel::toggleTheme,
             onRetry = viewModel::retryStartup,
         )
-        state.startupStage == StartupStage.MODEL_SETUP && state.agentKind == AgentKind.ANTIGRAVITY ->
-            AntigravityOnboardingScreen(
-                state = state,
-                currentLanguageCode = state.languageCode,
-                onSetLanguage = viewModel::setLanguage,
-                onStartLogin = viewModel::startAntigravityLogin,
-                onSubmitCode = viewModel::submitAntigravityCode,
-                onContinue = viewModel::finishAntigravityOnboarding,
-                onSkip = viewModel::skipOnboarding,
-                onSelectAgent = viewModel::chooseOnboardingAgent,
-                onToggleTheme = viewModel::toggleTheme,
-            )
-        state.startupStage == StartupStage.MODEL_SETUP -> ProviderSetupScreen(
-            initial = state.provider,
-            onboarding = true,
-            agentKind = state.agentKind,
-            initialStep = 1,
-            currentLanguageCode = state.languageCode,
-            onSetLanguage = viewModel::setLanguage,
-            onSave = viewModel::finishOnboarding,
-            onSkip = viewModel::skipOnboarding,
-            onDiscover = viewModel::discoverModels,
-            onValidate = viewModel::validateProvider,
-            onSelectAgent = viewModel::chooseOnboardingAgent,
-            onToggleTheme = viewModel::toggleTheme,
-            themeMode = state.themeMode,
+        state.startupStage == StartupStage.MODEL_SETUP -> PermissionsSetupScreen(
+            onContinue = {
+                viewModel.finishBackgroundSetup()
+                viewModel.skipOnboarding()
+            },
         )
         state.startupStage == StartupStage.READY && !state.backgroundSetupComplete ->
             BackgroundTaskSetupScreen(

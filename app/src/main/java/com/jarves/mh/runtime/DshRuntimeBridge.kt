@@ -70,7 +70,7 @@ class DshRuntimeBridge(
         foregroundResultPosted = false
         lastThinkingUpdateAt = 0L
         eventBus.emit(RuntimeEvent.SessionStarted(sessionId))
-        pushForegroundProgress(R.string.rt_bridge_starting, "DeepSeek Harness")
+        pushForegroundProgress(R.string.rt_bridge_starting, if (provider.kind == ProviderKind.LOCAL_AI) "Local AI" else "DeepSeek Harness")
         val secret = secretFor(provider).orEmpty().ifBlank { localServerPlaceholderKey(provider) }
         if (secret.isBlank()) {
             eventBus.emit(RuntimeEvent.SessionFailed(sessionId, "No API key is saved for ${provider.kind.title}."))
@@ -100,6 +100,22 @@ class DshRuntimeBridge(
                 }
             }
             startForegroundRuntime(projectSlug)
+            if (provider.kind == ProviderKind.LOCAL_AI) {
+                val workspace = checkpoints.ensureWorkspace(projectId)
+                checkpoints.createCheckpoint(projectId, workspace)
+                LocalAgentEngine.runSession(
+                    sessionId = sessionId,
+                    workspace = workspace,
+                    prompt = prompt,
+                    history = conversationHistory,
+                    installer = installer,
+                    eventBus = eventBus,
+                    isStopped = { userStopRequested },
+                )
+                finishedSessions.add(sessionId)
+                eventBus.emit(RuntimeEvent.SessionCompleted(sessionId))
+                return@runCatching
+            }
             val installed = installer.installedRuntime()
             check(installer.isAgentInstalled(com.jarves.mh.model.AgentKind.DEEPSEEK_HARNESS)) {
                 "DeepSeek Harness is not installed. Open Settings → Coding agent to install it."
