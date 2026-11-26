@@ -32,6 +32,8 @@ object LocalModelManager {
     private var serverProcess: Process? = null
 
     val presets = listOf(
+        LocalModelPreset("gemma-2-2b-abliterated", "Gemma 2 2B Abliterated", true, 4, 1.6, "1.6 GB · 4GB+ RAM", "Fast uncensored model with zero thinking lag.", "gemma-2-2b-it-abliterated-Q4_K_M.gguf", "https://huggingface.co/bartowski/gemma-2-2b-it-abliterated-GGUF/resolve/main/gemma-2-2b-it-abliterated-Q4_K_M.gguf"),
+        LocalModelPreset("phi-3.5-mini", "Phi-3.5 Mini 3.8B", false, 4, 2.2, "2.2 GB · 4GB+ RAM", "Lightweight fast coding & reasoning model.", "Phi-3.5-mini-instruct-Q4_K_M.gguf", "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf"),
         LocalModelPreset("qwen3-1.7b", "Qwen3 1.7B (Ultra-Fast)", false, 3, 1.1, "1.1 GB · 3GB+ RAM", "Fastest 2026 coding & tool model for mobile CPU (~3x faster prefill).", "Qwen3-1.7B-Q4_K_M.gguf", "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"),
         LocalModelPreset("qwen3-4b-2507", "Qwen3 4B Instruct (2507)", false, 4, 2.5, "2.5 GB · 4GB+ RAM", "Fast 2026 4B model with strong tool calling & zero thinking lag.", "Qwen3-4B-Instruct-2507-Q4_K_M.gguf", "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"),
         LocalModelPreset("qwen3.5-4b", "Qwen3.5 4B (Top 8GB Pick)", false, 6, 3.4, "3.4 GB · 6GB+ RAM", "Top-rated 2026 model for 8GB RAM: coding, tool use & reasoning.", "Qwen3.5-4B-Q4_K_M.gguf", "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf"),

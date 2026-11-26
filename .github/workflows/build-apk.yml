@@ -80,4 +80,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --yes || true
-          gh release create latest app/build/outputs/apk/online/debug/app-online-debug.apk --title "MH Local Latest" --notes "Direct APK build #${{ github.run_number }}" --clobber || gh release upload latest app/build/outputs/apk/online/debug/app-online-debug.apk --clobber
+          gh release create latest app/build/outputs/apk/online/debug/app-online-debug.apk --title "MH Local Latest" --notes "Direct APK build #${{ github.run_number }}"

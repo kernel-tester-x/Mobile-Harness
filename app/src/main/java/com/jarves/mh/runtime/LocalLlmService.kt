@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.content.ContextCompat
 import java.io.File
 
@@ -21,6 +22,7 @@ class LocalLlmService : Service() {
 
         @Volatile
         private var process: Process? = null
+        private var wakeLock: PowerManager.WakeLock? = null
 
         fun start(context: Context, modelPath: String) {
             val intent = Intent(context, LocalLlmService::class.java).apply {
@@ -52,6 +54,12 @@ class LocalLlmService : Service() {
         val modelName = File(modelPath).name
         ensureChannel()
         startForeground(NOTIF_ID, buildNotification("Running $modelName"))
+        runCatching {
+            if (wakeLock?.isHeld != true) {
+                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "mh:LocalLlmWakeLock").apply { acquire(60 * 60 * 1000L) }
+            }
+        }
 
         Thread {
             try {
@@ -88,6 +96,8 @@ class LocalLlmService : Service() {
     }
 
     override fun onDestroy() {
+        runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
+        wakeLock = null
         process?.destroyForcibly()
         process = null
         super.onDestroy()
