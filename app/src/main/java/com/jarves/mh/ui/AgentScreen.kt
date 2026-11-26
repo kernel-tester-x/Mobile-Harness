@@ -1,6 +1,12 @@
 package com.jarves.mh.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -1610,7 +1616,7 @@ private fun AgentProviderCard(
                 onClick = { connectionExpanded = !connectionExpanded },
             )
 
-            AnimatedVisibility(connectionExpanded) {
+            AnimatedVisibility(connectionExpanded, enter = fadeIn(tween(150)) + expandVertically(spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioNoBouncy)), exit = fadeOut(tween(120)) + shrinkVertically(spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioNoBouncy))) {
                 Column(
                     modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1677,7 +1683,7 @@ private fun AgentProviderCard(
                     onClick = { endpointExpanded = !endpointExpanded },
                 )
 
-                AnimatedVisibility(endpointExpanded) {
+                AnimatedVisibility(endpointExpanded, enter = fadeIn(tween(150)) + expandVertically(spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioNoBouncy)), exit = fadeOut(tween(120)) + shrinkVertically(spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioNoBouncy))) {
                     Column(
                         modifier = Modifier.padding(top = 8.dp, bottom = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1846,7 +1852,7 @@ private fun AgentProviderCard(
                 }
             }
 
-            AnimatedVisibility(keysExpanded) {
+            AnimatedVisibility(keysExpanded, enter = fadeIn(tween(150)) + expandVertically(spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioNoBouncy)), exit = fadeOut(tween(120)) + shrinkVertically(spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioNoBouncy))) {
                 Column(
                     modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),

@@ -14,13 +14,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-val PocketOrange = Color(0xFFA8C7FA)
-val PocketBlue = Color(0xFF7CACF8)
+val PocketOrange = Color(0xFF38BDF8)
+val PocketBlue = Color(0xFF818CF8)
 val PocketGreen = Color(0xFF81C995)
-val PocketBackground = Color(0xFF131314)
-val PocketSurface = Color(0xFF1E1F20)
-val PocketSurfaceVariant = Color(0xFF282A2C)
-val PocketOutline = Color(0xFF444746)
+val PocketBackground = Color(0xFF090D16)
+val PocketSurface = Color(0xFF101726)
+val PocketSurfaceVariant = Color(0xFF182235)
+val PocketOutline = Color(0xFF28354D)
 
 private val DarkColors = darkColorScheme(
     primary = PocketOrange,
