@@ -45,7 +45,7 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
 
         val raw = mutableListOf<Pair<String, String>>()
         history.takeLast(6).forEach { m ->
-            val r = if (m.toString().let { it.contains("USER", true) || it.contains("isUser=true", true) || it.contains("fromUser=true", true) }) "user" else "assistant"
+            val r = if (m.fromUser) "user" else "assistant"
             if (m.text.isNotBlank()) raw += r to m.text.take(1500)
         }
         raw += "user" to prompt
@@ -55,10 +55,18 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
         var nudgeCount = 0
             for (step in 0 until 6) {
             if (isStopped()) break
-            val reply = callServer(msgs, logFile, isStopped)
+            var sentLen = 0
+            val reply = callServer(msgs, logFile, isStopped) { soFar ->
+                val end = safeVisibleEnd(soFar)
+                if (end > sentLen) {
+                    val chunk = soFar.substring(sentLen, end)
+                    sentLen = end
+                    kotlinx.coroutines.runBlocking { eventBus.emit(RuntimeEvent.AssistantDelta(sessionId, chunk)) }
+                }
+            }
             val m = Regex("<tool>(\\{[\\s\\S]*?\\})</tool>").find(reply)
-            val visible = reply.replace(Regex("<tool>[\\s\\S]*?</tool>"), "").trim()
-            if (visible.isNotEmpty()) {
+            val visible = reply.substring(minOf(sentLen, reply.length)).replace(Regex("<tool>[\\s\\S]*?</tool>"), "").trim()
+            if (visible.isNotEmpty() || (m != null && sentLen > 0)) {
                 eventBus.emit(RuntimeEvent.AssistantDelta(sessionId, visible + if (m != null) "\n" else ""))
             }
             if (m == null) break
@@ -73,6 +81,17 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
             msgs.put(JSONObject().put("role", "assistant").put("content", reply))
             msgs.put(JSONObject().put("role", "user").put("content", "Tool result ($toolName):\n${result.take(4000)}"))
         }
+    }
+
+    /** Index up to which streamed text is safe to show (stops before a tool block or a half-typed tag). */
+    private fun safeVisibleEnd(text: String): Int {
+        val tag = "<tool>"
+        val cut = text.indexOf(tag)
+        if (cut >= 0) return cut
+        for (k in minOf(tag.length - 1, text.length) downTo 1) {
+            if (text.endsWith(tag.substring(0, k))) return text.length - k
+        }
+        return text.length
     }
 
     private fun buildAlternatingMessages(raw: List<Pair<String, String>>): JSONArray {
@@ -146,7 +165,14 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
                     } else {
                         ProcessBuilder("sh", "-c", cmd).directory(workspace).redirectErrorStream(true).start()
                     }
+                    val killer = Thread {
+                        val slept = try { Thread.sleep(180_000); true } catch (e: InterruptedException) { false }
+                        if (slept && proc.isAlive) proc.destroyForcibly()
+                    }
+                    killer.isDaemon = true
+                    killer.start()
                     val out = proc.inputStream.bufferedReader().readText()
+                    killer.interrupt()
                     val code = proc.waitFor()
                     "Exit $code:\n${out.take(4000)}"
                 }
@@ -155,7 +181,7 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
         }.getOrElse { "Tool error: ${it.message}" }
     }
 
-    private fun callServer(messages: JSONArray, logFile: File, isStopped: () -> Boolean): String {
+    private fun callServer(messages: JSONArray, logFile: File, isStopped: () -> Boolean, onProgress: (String) -> Unit = {}): String {
         val body = JSONObject()
             .put("model", "local")
             .put("stream", true)
@@ -174,6 +200,15 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
             setRequestProperty("Accept", "text/event-stream")
         }
         val full = StringBuilder()
+        val finished = java.util.concurrent.atomic.AtomicBoolean(false)
+        val watcher = Thread {
+            while (!finished.get()) {
+                if (isStopped()) { runCatching { conn.disconnect() }; break }
+                try { Thread.sleep(300) } catch (e: InterruptedException) { break }
+            }
+        }
+        watcher.isDaemon = true
+        watcher.start()
         try {
             conn.outputStream.use { it.write(body.toString().toByteArray()) }
             if (conn.responseCode !in 200..299) {
@@ -191,10 +226,13 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
                         JSONObject(data).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta")
                     }.getOrNull() ?: continue
                     val piece = if (delta.isNull("content")) "" else delta.optString("content", "")
-                    if (piece.isNotEmpty()) full.append(piece)
+                    if (piece.isNotEmpty()) { full.append(piece); onProgress(full.toString()) }
                 }
             }
+        } catch (e: java.io.IOException) {
+            if (!isStopped()) throw e
         } finally {
+            finished.set(true)
             conn.disconnect()
         }
         return full.toString()
