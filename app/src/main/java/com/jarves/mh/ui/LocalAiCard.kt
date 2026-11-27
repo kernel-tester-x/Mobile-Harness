@@ -179,6 +179,20 @@ private suspend fun probeHealth(): Boolean = withContext(Dispatchers.IO) {
     }
 }
 
+private suspend fun probeRunningModel(): String? = withContext(Dispatchers.IO) {
+    try {
+        val c = URL("http://127.0.0.1:8080/v1/models").openConnection() as HttpURLConnection
+        c.connectTimeout = 800
+        c.readTimeout = 800
+        if (c.responseCode != 200) return@withContext null
+        val body = c.inputStream.bufferedReader().readText()
+        val id = org.json.JSONObject(body).optJSONArray("data")?.optJSONObject(0)?.optString("id").orEmpty()
+        id.substringAfterLast('/').removeSuffix(".gguf").ifBlank { null }
+    } catch (_: Exception) {
+        null
+    }
+}
+
 private fun applyLocalModel(
     context: Context,
     provider: ProviderProfile,
@@ -214,6 +228,7 @@ fun LocalAiCard(
     var expandedId by rememberSaveable { mutableStateOf<String?>(null) }
     var localStatusMsg by remember { mutableStateOf("") }
     var serverAlive by remember { mutableStateOf(false) }
+    var runningModelName by remember { mutableStateOf<String?>(null) }
     var filesTick by remember { mutableIntStateOf(0) }
     val clipboard = LocalClipboardManager.current
 
@@ -266,7 +281,7 @@ fun LocalAiCard(
         Column {
             Text("Local AI Gallery", fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(
-                String.format("%.1f GB RAM · %.1f GB free · %s", ramGb, freeGb, if (serverAlive) "Engine Online" else "Engine Idle"),
+                String.format("%.1f GB RAM · %.1f GB free · %s", ramGb, freeGb, if (serverAlive) "Running: ${runningModelName ?: "Offline AI"}" else "Engine Idle"),
                 fontSize = 12.sp,
                 color = if (serverAlive) Color(0xFF81C995) else MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -477,6 +492,7 @@ fun LocalAiBottomPanel(
     var filesTick by remember { mutableIntStateOf(0) }
     var statusMsg by remember { mutableStateOf("") }
     var serverAlive by remember { mutableStateOf(false) }
+    var runningModelName by remember { mutableStateOf<String?>(null) }
     val startInteraction = remember { MutableInteractionSource() }
     val startPressed by startInteraction.collectIsPressedAsState()
     val startScale by animateFloatAsState(if (startPressed) 0.97f else 1f, spring(stiffness = Spring.StiffnessHigh), label = "startScale")
@@ -582,7 +598,7 @@ fun LocalAiBottomPanel(
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Local Engine & Diagnostics", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Text(
-                    "Status: ${if (serverAlive) "Running" else "Stopped"} · Context: 12288 (q8_0) · Threads: 4",
+                    "Status: ${if (serverAlive) "Running (${runningModelName ?: "Offline AI"})" else "Stopped"} · Context: 12288 (q8_0) · Threads: 4",
                     fontSize = 11.sp,
                     color = if (serverAlive) Color(0xFF81C995) else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
