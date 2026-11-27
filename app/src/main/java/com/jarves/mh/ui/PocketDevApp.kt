@@ -6435,13 +6435,13 @@ private fun ChatTab(
                 val canSend = prompt.isNotBlank() || pendingAttachments.isNotEmpty()
 
                 Surface(
-                    shape = RoundedCornerShape(26.dp),
-                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(28.dp),
+                    color = Color(0xFF1E1F20),
                     border = BorderStroke(
                         width = 1.dp,
-                        color = if (canSend) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outlineVariant,
+                        color = if (canSend) Color(0xFF3C4043) else Color(0xFF282A2C),
                     ),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
                 ) {
                     Row(
                         modifier = Modifier
@@ -6457,10 +6457,10 @@ private fun ChatTab(
                                 modifier = Modifier.size(40.dp),
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.AttachFile,
+                                    imageVector = Icons.Default.Add,
                                     contentDescription = stringResource(R.string.chat_attach_files),
-                                    modifier = Modifier.size(20.dp),
-                                    tint = if (pendingAttachments.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(22.dp),
+                                    tint = if (pendingAttachments.isNotEmpty()) Color(0xFFA8C7FA) else Color(0xFFE3E3E3),
                                 )
                             }
                             DropdownMenu(expanded = attachMenuOpen, onDismissRequest = { attachMenuOpen = false }) {
@@ -6495,8 +6495,8 @@ private fun ChatTab(
                                 Box(contentAlignment = Alignment.CenterStart) {
                                     if (prompt.isEmpty()) {
                                         Text(
-                                            text = stringResource(R.string.chat_message_agent, stringResource(agentKind.titleRes())),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            text = "What's next?",
+                                            color = Color(0xFF9AA0A6),
                                             fontSize = 15.sp,
                                         )
                                     }
@@ -6532,7 +6532,7 @@ private fun ChatTab(
                                 modifier = Modifier
                                     .size(38.dp)
                                     .background(
-                                        color = if (canSend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        color = if (canSend) Color(0xFF3B3898) else Color(0xFF282A2C),
                                         shape = CircleShape,
                                     )
                                     .clickable(
@@ -6549,7 +6549,7 @@ private fun ChatTab(
                                 Icon(
                                     imageVector = Icons.Default.ArrowUpward,
                                     contentDescription = stringResource(R.string.chat_send),
-                                    tint = if (canSend) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    tint = if (canSend) Color.White else Color(0xFF6E7175),
                                     modifier = Modifier.size(19.dp),
                                 )
                             }
@@ -6993,46 +6993,68 @@ private fun formatDuration(totalSeconds: Long): String = when {
 
 @Composable
 private fun MessageBubble(message: ChatMessage, onRunInTerminal: (String) -> Unit, onOpenAttachment: (ChatAttachment) -> Unit) {
+    val clipboard = LocalClipboardManager.current
     val displayedText = if (!message.fromUser && message.text == "Hi! Tell me what you want to build or change.") {
         stringResource(R.string.chat_welcome)
     } else {
         message.text
     }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (message.fromUser) Arrangement.End else Arrangement.Start) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        horizontalArrangement = if (message.fromUser) Arrangement.End else Arrangement.Start,
+    ) {
         Surface(
-            color = if (message.fromUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(18.dp),
-            modifier = Modifier.fillMaxWidth(if (message.fromUser) .82f else .92f),
+            color = if (message.fromUser) Color(0xFF1E1F20) else Color.Transparent,
+            shape = RoundedCornerShape(22.dp),
+            modifier = if (message.fromUser) Modifier.widthIn(max = 310.dp) else Modifier.fillMaxWidth(),
         ) {
-            Column(Modifier.padding(top = 12.dp)) {
+            Column(Modifier.padding(top = if (message.fromUser) 10.dp else 4.dp)) {
                 SelectionContainer {
                     if (message.fromUser) {
                         Text(
                             text = message.text,
-                            modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 8.dp),
-                            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 22.sp),
+                            color = Color(0xFFE3E3E3),
                         )
                     } else {
                         MarkdownText(
                             markdown = displayedText,
-                            modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 8.dp),
-                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 6.dp),
+                            color = Color(0xFFE3E3E3),
                             onRunCode = onRunInTerminal,
                         )
                     }
                 }
-                if (!message.fromUser && message.workedMillis > 0L) {
-                    Text(
-                        text = stringResource(R.string.ws_worked_for, formatDuration((message.workedMillis / 1_000L).coerceAtLeast(1L))),
-                        modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 10.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp,
-                    )
+                if (!message.fromUser) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        IconButton(
+                            onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(displayedText)) },
+                            modifier = Modifier.size(30.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Copy",
+                                tint = Color(0xFF9AA0A6),
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                        if (message.workedMillis > 0L) {
+                            Text(
+                                text = stringResource(R.string.ws_worked_for, formatDuration((message.workedMillis / 1_000L).coerceAtLeast(1L))),
+                                color = Color(0xFF9AA0A6),
+                                fontSize = 11.sp,
+                            )
+                        }
+                    }
                 }
                 if (message.attachments.isNotEmpty()) {
                     Column(
-                        Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                        Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         message.attachments.forEach { attachment ->
@@ -7040,7 +7062,6 @@ private fun MessageBubble(message: ChatMessage, onRunInTerminal: (String) -> Uni
                         }
                     }
                 }
-                Spacer(Modifier.height(4.dp))
             }
         }
     }
