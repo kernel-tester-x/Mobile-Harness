@@ -141,6 +141,22 @@ object LocalBgDownloader {
     }
 }
 
+data class EngineLiveUi(val alive: Boolean = false, val model: String? = null, val starting: Boolean = false)
+
+object LocalEngineLiveState {
+    val state = MutableStateFlow(EngineLiveUi())
+    suspend fun refresh(startingOverride: Boolean? = null) {
+        val ok = probeHealth()
+        val model = if (ok) probeRunningModel() else null
+        val prev = state.value
+        state.value = EngineLiveUi(
+            alive = ok,
+            model = model ?: if (ok) prev.model else null,
+            starting = if (ok) false else (startingOverride ?: prev.starting),
+        )
+    }
+}
+
 private fun detectQuant(name: String): String {
     val m = Regex("(I?Q\\d+_[A-Z0-9_]+|F16|BF16)", RegexOption.IGNORE_CASE).find(name)
     return m?.value?.uppercase() ?: "GGUF"
@@ -470,7 +486,17 @@ fun LocalAiBottomPanel(
     val ramGb = remember { LocalModelManager.getTotalRamGb(context) }
     val models = remember(filesTick) { LocalModelManager.listDownloadedModels(context) }
 
-    LaunchedEffect(filesTick, statusMsg) { serverAlive = probeHealth() }
+    val liveEngine by LocalEngineLiveState.state.collectAsState()
+    LaunchedEffect(liveEngine) {
+        serverAlive = liveEngine.alive
+        runningModelName = liveEngine.model
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            LocalEngineLiveState.refresh()
+            delay(2000)
+        }
+    }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult

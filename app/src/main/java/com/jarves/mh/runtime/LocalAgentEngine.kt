@@ -114,6 +114,14 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
     }
 
     private fun resolvePath(workspace: File, raw: String): File {
+        val directName = raw.trim().substringAfterLast('/')
+        if (directName.isNotEmpty()) {
+            val attachmentsDir = File(workspace, "attachments")
+            if (attachmentsDir.exists()) {
+                val hit = attachmentsDir.walkTopDown().firstOrNull { it.isFile && it.name.equals(directName, ignoreCase = true) }
+                if (hit != null) return hit
+            }
+        }
         val trimmed = raw.trim()
         if (trimmed.startsWith("/sdcard/") || trimmed.startsWith("/storage/emulated/0/") || trimmed == "/sdcard" || trimmed == "/storage/emulated/0") {
             return File(trimmed)
