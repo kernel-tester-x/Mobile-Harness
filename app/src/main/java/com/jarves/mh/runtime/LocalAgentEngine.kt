@@ -52,7 +52,8 @@ Paths are relative to the workspace root ('.' or 'attachments'). To inspect file
 
         val msgs = buildAlternatingMessages(raw)
 
-        for (step in 0 until 6) {
+        var nudgeCount = 0
+            for (step in 0 until 6) {
             if (isStopped()) break
             val reply = callServer(msgs, logFile, isStopped)
             val m = Regex("<tool>(\\{[\\s\\S]*?\\})</tool>").find(reply)
