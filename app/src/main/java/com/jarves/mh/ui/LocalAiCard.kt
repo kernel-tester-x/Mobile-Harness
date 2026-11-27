@@ -61,7 +61,7 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
-private val cardShape = RoundedCornerShape(20.dp)
+private val cardShape = RoundedCornerShape(28.dp)
 private val pillShape = RoundedCornerShape(50)
 
 data class BgDownloadState(
@@ -230,6 +230,7 @@ fun LocalAiCard(
     var serverAlive by remember { mutableStateOf(false) }
     var runningModelName by remember { mutableStateOf<String?>(null) }
     var filesTick by remember { mutableIntStateOf(0) }
+    var pendingDeleteFile by remember { mutableStateOf<File?>(null) }
     val clipboard = LocalClipboardManager.current
 
     val ramGb = remember { LocalModelManager.getTotalRamGb(context) }
@@ -278,6 +279,55 @@ fun LocalAiCard(
     }
 
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = if (serverAlive) Color(0xFF13263B) else Color(0xFF141821),
+            border = BorderStroke(1.dp, if (serverAlive) Color(0xFF38BDF8) else Color(0xFF28354D)),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Surface(shape = pillShape, color = if (serverAlive) Color(0xFF143529) else Color(0xFF1E293B)) {
+                    Text(
+                        if (serverAlive) "● Running" else "○ Idle",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (serverAlive) Color(0xFF81C995) else Color(0xFF94A3B8),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (serverAlive) (runningModelName ?: "Offline AI") else "No model running",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = Color(0xFFF8FAFC),
+                        maxLines = 1,
+                    )
+                    Text(
+                        String.format("%.1f GB RAM · %.1f GB free", ramGb, freeGb),
+                        fontSize = 11.sp,
+                        color = Color(0xFF94A3B8),
+                    )
+                }
+                if (serverAlive) {
+                    Button(
+                        onClick = {
+                            LocalLlmService.stop(context)
+                            serverAlive = false
+                            runningModelName = null
+                            localStatusMsg = "Stopped offline AI."
+                        },
+                        shape = pillShape,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF451A1A), contentColor = Color(0xFFF28B82)),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    ) { Text("Kill", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                }
+            }
+        }
         Column {
             Text("Local AI Gallery", fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(
@@ -351,6 +401,74 @@ fun LocalAiCard(
             }
         }
 
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Model & access", fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            TextButton(onClick = { picker.launch(arrayOf("*/*")) }, shape = pillShape) { Text("+ Import AI") }
+        }
+        if (downloadedFiles.isEmpty()) {
+            Surface(shape = cardShape, color = Color(0xFF101726), modifier = Modifier.fillMaxWidth()) {
+                Text("No downloaded models yet. Search or pick one below.", fontSize = 12.sp, color = Color(0xFF94A3B8), modifier = Modifier.padding(16.dp))
+            }
+        } else {
+            downloadedFiles.forEach { file ->
+                val isActive = provider.model == file.absolutePath
+                val sizeGb = file.length() / (1024.0 * 1024.0 * 1024.0)
+                val quant = detectQuant(file.name)
+                val fit = ramFitLabel(file.length(), ramGb)
+                Surface(
+                    shape = cardShape,
+                    color = if (isActive) Color(0xFF15253B) else Color(0xFF101726),
+                    border = BorderStroke(1.2.dp, if (isActive) Color(0xFF38BDF8) else Color(0xFF28354D)),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(file.nameWithoutExtension, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFFF8FAFC))
+                            Text(String.format("%.2f GB · %s · %s", sizeGb, quant, fit), fontSize = 12.sp, color = Color(0xFF94A3B8))
+                        }
+                        if (isActive) {
+                            Surface(shape = pillShape, color = Color(0xFF143529)) {
+                                Text("Active", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF81C995), modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
+                            }
+                        } else {
+                            IconButton(onClick = { pendingDeleteFile = file }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFF28B82))
+                            }
+                            Button(
+                                onClick = { applyLocalModel(context, provider, onSaveProvider, scope, file) { localStatusMsg = it } },
+                                shape = pillShape,
+                                modifier = Modifier.height(44.dp),
+                                contentPadding = PaddingValues(horizontal = 20.dp),
+                            ) { Text("Use", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                        }
+                    }
+                }
+            }
+        }
+        pendingDeleteFile?.let { targetDel ->
+            AlertDialog(
+                onDismissRequest = { pendingDeleteFile = null },
+                shape = RoundedCornerShape(28.dp),
+                title = { Text("Delete this model?") },
+                text = { Text("Do you really want to delete ${targetDel.name}? This cannot be undone.") },
+                dismissButton = {
+                    OutlinedButton(onClick = { pendingDeleteFile = null }, shape = pillShape) { Text("No") }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            runCatching { targetDel.delete() }
+                            filesTick++
+                            localStatusMsg = "Deleted ${targetDel.name}"
+                            pendingDeleteFile = null
+                        },
+                        shape = pillShape,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444), contentColor = Color.White),
+                    ) { Text("Yes") }
+                },
+            )
+        }
+        Text("Discover & Search Models", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF94A3B8))
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -594,55 +712,7 @@ fun LocalAiBottomPanel(
             }
         }
 
-        Surface(shape = cardShape, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Local Engine & Diagnostics", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Text(
-                    "Status: ${if (serverAlive) "Running (${runningModelName ?: "Offline AI"})" else "Stopped"} · Context: 12288 (q8_0) · Threads: 4",
-                    fontSize = 11.sp,
-                    color = if (serverAlive) Color(0xFF81C995) else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        interactionSource = startInteraction,
-                        onClick = {
-                            scope.launch {
-                                val ok = probeHealth()
-                                serverAlive = ok
-                                statusMsg = if (ok) "Offline AI is ready!" else "Offline AI is not running yet."
-                            }
-                        },
-                        shape = pillShape,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("Test", fontSize = 12.sp) }
-                    OutlinedButton(
-                        onClick = {
-                            if (serverAlive) {
-                                LocalLlmService.stop(context)
-                                serverAlive = false
-                                statusMsg = "Engine stopped."
-                            } else {
-                                val m = models.firstOrNull { it.absolutePath == activeModel } ?: models.firstOrNull()
-                                if (m != null) {
-                                    onSelectModel(m.absolutePath)
-                                    scope.launch { statusMsg = LocalModelManager.tryAutoStartServer(context, m) }
-                                }
-                            }
-                        },
-                        shape = pillShape,
-                        modifier = Modifier.weight(1f),
-                    ) { Text(if (serverAlive) "Stop" else "Start", fontSize = 12.sp) }
-                    Button(
-                        onClick = { statusMsg = AppLogExporter.export(context) },
-                        shape = pillShape,
-                        modifier = Modifier.weight(1.2f),
-                    ) { Text("Export Log", fontSize = 12.sp) }
-                }
-                if (statusMsg.isNotEmpty()) {
-                    Text(statusMsg, fontSize = 11.sp, color = Color(0xFFA8C7FA))
-                }
-            }
-        }
+        
 
         val toolsPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
@@ -666,43 +736,7 @@ fun LocalAiBottomPanel(
             }
         }
 
-        Surface(shape = cardShape, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Backup & Restore Hub", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Text("Models stay in Download/MobileHarnessModels. Back up or restore Python, C++ & SDK tools here.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = {
-                            scope.launch {
-                                statusMsg = "Backing up Developer Tools..."
-                                statusMsg = withContext(Dispatchers.IO) {
-                                    runCatching {
-                                        val rootfs = File(context.filesDir, "runtime/ubuntu")
-                                        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "MobileHarnessToolsBackup").apply { mkdirs() }
-                                        val outTar = File(dir, "tools-backup.tar.gz")
-                                        val targets = listOf("opt", "root/.local", "root/.android", "var/cache/apt/archives", "usr/local", ".pocket-language-tools-version", ".pocket-core-tools-version", ".pocket-system-upgrade-version", ".pocket-dev-stacks.json")
-                                            .filter { File(rootfs, it).exists() }
-                                        if (targets.isEmpty()) return@runCatching "No installed tools found to back up yet."
-                                        val cmd = mutableListOf("tar", "-czf", outTar.absolutePath, "-C", rootfs.absolutePath)
-                                        cmd.addAll(targets)
-                                        val code = ProcessBuilder(cmd).redirectErrorStream(true).start().waitFor()
-                                        MediaScannerConnection.scanFile(context, arrayOf(outTar.absolutePath), null, null)
-                                        if (code == 0) "Tools backed up to Download/MobileHarnessToolsBackup/tools-backup.tar.gz" else "Backup exited with $code"
-                                    }.getOrElse { "Backup failed: ${it.message}" }
-                                }
-                            }
-                        },
-                        shape = pillShape,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("Backup Tools", fontSize = 12.sp) }
-                    Button(
-                        onClick = { toolsPicker.launch(arrayOf("*/*")) },
-                        shape = pillShape,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("Import Tools", fontSize = 12.sp) }
-                }
-            }
-        }
+        
 
     }
 }

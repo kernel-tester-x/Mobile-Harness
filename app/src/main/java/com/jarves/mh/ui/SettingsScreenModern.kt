@@ -26,6 +26,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import android.os.Environment
+import com.jarves.mh.runtime.AppLogExporter
+import com.jarves.mh.runtime.LocalLlmService
+import com.jarves.mh.runtime.LocalModelManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
@@ -196,12 +209,12 @@ fun SettingsScreen(
                                 .size(32.dp)
                                 .background(
                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                    shape = RoundedCornerShape(9.dp),
+                                    shape = RoundedCornerShape(50),
                                 )
                                 .border(
                                     width = 1.dp,
                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
-                                    shape = RoundedCornerShape(9.dp),
+                                    shape = RoundedCornerShape(50),
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -265,6 +278,8 @@ fun SettingsScreen(
                         busy = state.isRunning || state.projectTerminalRunning || state.androidBuildRunning ||
                             state.projectExportRunning || state.agentInstalling != null || state.devStackInstalling != null,
                     )
+                    Spacer(Modifier.height(10.dp))
+                    LocalToolsSettingsCard()
                 }
             }
 
@@ -385,7 +400,7 @@ fun SettingsScreen(
                             state.devStackBytes?.let { (downloaded, total) ->
                                 Surface(
                                     modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(20.dp),
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                                 ) {
                                     Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
@@ -637,7 +652,7 @@ private fun DeveloperDiagnosticsContent(
 private fun DiagnosticsCard(title: String, content: @Composable () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
     ) {
@@ -679,7 +694,7 @@ private fun SettingsAccordion(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -688,7 +703,7 @@ private fun SettingsAccordion(
                 Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Surface(shape = RoundedCornerShape(11.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), modifier = Modifier.size(40.dp)) {
+                Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), modifier = Modifier.size(40.dp)) {
                     Box(contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary) }
                 }
                 Spacer(Modifier.width(12.dp))
@@ -734,7 +749,7 @@ private fun AntigravityConnectionSettings(
     val auth = state.antigravityAuth
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(24.dp),
     ) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.st_official_antigravity_cli), fontWeight = FontWeight.SemiBold)
@@ -823,7 +838,7 @@ private fun AntigravityConnectionSettings(
         }
     }
 
-    Surface(color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f), shape = RoundedCornerShape(12.dp)) {
+    Surface(color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f), shape = RoundedCornerShape(20.dp)) {
         Text(
             stringResource(R.string.st_antigravity_approval_warning),
             Modifier.fillMaxWidth().padding(12.dp),
@@ -867,7 +882,7 @@ private fun ConnectionSettings(
     val visibleKinds = remember(state.agentKind) { providersForAgent(state.agentKind) }
     var providerExpanded by rememberSaveable { mutableStateOf(false) }
     var addKeyExpanded by rememberSaveable(savedKeys.isEmpty()) { mutableStateOf(savedKeys.isEmpty()) }
-    Surface(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f), shape = RoundedCornerShape(14.dp)) {
+    Surface(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f), shape = RoundedCornerShape(24.dp)) {
         Row(Modifier.fillMaxWidth().padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).background(
                 when (state.apiPingStatus) {
@@ -897,7 +912,7 @@ private fun ConnectionSettings(
     Text(stringResource(R.string.provider_label), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Surface(
         modifier = Modifier.fillMaxWidth().clickable { providerExpanded = !providerExpanded },
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
         border = BorderStroke(1.dp, if (providerExpanded) PocketOrange else MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -910,7 +925,7 @@ private fun ConnectionSettings(
         }
     }
     AnimatedVisibility(providerExpanded) {
-        Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)) {
+        Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)) {
             Column {
                 visibleKinds.forEachIndexed { index, kind ->
                 Row(
@@ -945,7 +960,7 @@ private fun ConnectionSettings(
     }
     if (state.agentKind == AgentKind.DEEPSEEK_HARNESS && selectedKind in DSH_PROTOCOL_PROVIDERS) {
         Text(stringResource(R.string.provider_gateway_protocol), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)) {
+        Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)) {
             Column {
                 listOf("anthropic-messages", "openai-completions", "openai-responses").forEach { option ->
                     Row(
@@ -978,7 +993,7 @@ private fun ConnectionSettings(
     }
     if (savedKeys.isNotEmpty()) {
         Text(stringResource(R.string.st_saved_api_keys), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)) {
+        Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)) {
             Column {
                 savedKeys.forEachIndexed { index, key ->
                     Row(
@@ -1069,7 +1084,7 @@ private fun SelectionDot(selected: Boolean) {
 private fun ModernThemeChoice(title: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(20.dp),
         color = if (selected) PocketOrange.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         border = BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) PocketOrange else MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -1147,6 +1162,94 @@ private fun DebugUpdateChannelSection(
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+
+@Composable
+private fun LocalToolsSettingsCard() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var msg by remember { mutableStateOf("") }
+    val toolsPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            msg = "Restoring Developer Tools..."
+            msg = withContext(Dispatchers.IO) {
+                runCatching {
+                    val rootfs = File(context.filesDir, "runtime/ubuntu").apply { mkdirs() }
+                    val tmp = File(context.cacheDir, "tools-import.tar.gz")
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        tmp.outputStream().use { out -> input.copyTo(out, 1024 * 1024) }
+                    }
+                    val proc = ProcessBuilder("tar", "-xzf", tmp.absolutePath, "-C", rootfs.absolutePath).redirectErrorStream(true).start()
+                    val code = proc.waitFor()
+                    tmp.delete()
+                    if (code == 0) "Developer Tools restored!" else "Restore failed (exit $code)"
+                }.getOrElse { "Restore failed: ${it.message}" }
+            }
+        }
+    }
+    Surface(
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Local Engine & Tools Backup", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Text("Test offline engine, export diagnostics, or back up PRoot packages.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            val ok = withContext(Dispatchers.IO) {
+                                runCatching {
+                                    val c = URL("http://127.0.0.1:8080/health").openConnection() as HttpURLConnection
+                                    c.connectTimeout = 800; c.readTimeout = 800; c.responseCode == 200
+                                }.getOrDefault(false)
+                            }
+                            msg = if (ok) "Offline AI engine is running!" else "Offline AI engine is stopped."
+                        }
+                    },
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.weight(1f),
+                ) { Text("Test Engine", fontSize = 12.sp) }
+                Button(
+                    onClick = { msg = AppLogExporter.export(context) },
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.weight(1f),
+                ) { Text("Export Log", fontSize = 12.sp) }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            msg = "Backing up tools..."
+                            msg = withContext(Dispatchers.IO) {
+                                runCatching {
+                                    val rootfs = File(context.filesDir, "runtime/ubuntu")
+                                    val outDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "MobileHarnessBackups").apply { mkdirs() }
+                                    val outFile = File(outDir, "mh-tools-backup.tar.gz")
+                                    val proc = ProcessBuilder("tar", "-czf", outFile.absolutePath, "-C", rootfs.absolutePath, ".").redirectErrorStream(true).start()
+                                    val code = proc.waitFor()
+                                    if (code == 0) "Saved to Download/MobileHarnessBackups/mh-tools-backup.tar.gz" else "Backup failed (exit $code)"
+                                }.getOrElse { "Backup failed: ${it.message}" }
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.weight(1f),
+                ) { Text("Backup Tools", fontSize = 12.sp) }
+                OutlinedButton(
+                    onClick = { toolsPicker.launch(arrayOf("*/*")) },
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.weight(1f),
+                ) { Text("Import Tools", fontSize = 12.sp) }
+            }
+            if (msg.isNotEmpty()) {
+                Text(msg, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+            }
         }
     }
 }

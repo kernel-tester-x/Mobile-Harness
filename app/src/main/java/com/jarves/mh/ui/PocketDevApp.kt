@@ -525,7 +525,7 @@ private fun AntigravityOnboardingScreen(
                     ) { Text(stringResource(R.string.ws_agy_complete_signin)) }
                 }
                 AntigravityAuthStatus.SIGNED_IN -> {
-                    Surface(color = PocketGreen.copy(alpha = 0.12f), shape = RoundedCornerShape(14.dp)) {
+                    Surface(color = PocketGreen.copy(alpha = 0.12f), shape = RoundedCornerShape(22.dp)) {
                         Text(
                             state.antigravityAuth.accountEmail?.let { stringResource(R.string.ws_agy_connected_as, it) } ?: stringResource(R.string.ws_agy_google_connected),
                             Modifier.fillMaxWidth().padding(16.dp),
@@ -539,7 +539,7 @@ private fun AntigravityOnboardingScreen(
                 }
             }
             OnboardingSecondaryActions(onChangeAgent = { showAgentPicker = true }, onSkip = onSkip)
-            Surface(color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f), shape = RoundedCornerShape(14.dp)) {
+            Surface(color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f), shape = RoundedCornerShape(22.dp)) {
                 Text(
                     stringResource(R.string.ws_agy_auto_approval_warning),
                     Modifier.fillMaxWidth().padding(14.dp),
@@ -625,7 +625,7 @@ private fun InitialLanguageSetupScreen(
 
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(26.dp),
                 color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             ) {
@@ -683,7 +683,7 @@ private fun InitialLanguageSetupScreen(
             Button(
                 onClick = onContinue,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(22.dp),
             ) {
                 Text(
                     stringResource(R.string.action_continue),
@@ -898,7 +898,7 @@ private fun BackgroundTaskSetupScreen(
 
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(26.dp),
                 color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             ) {
@@ -914,7 +914,7 @@ private fun BackgroundTaskSetupScreen(
             Spacer(Modifier.height(14.dp))
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(26.dp),
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)),
             ) {
@@ -1302,7 +1302,7 @@ private fun RuntimeSetupPromptScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(22.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -1395,7 +1395,7 @@ private fun RuntimeSetupPromptScreen(
 
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(26.dp),
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
@@ -1431,7 +1431,7 @@ private fun RuntimeSetupPromptScreen(
 
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(26.dp),
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
@@ -1468,7 +1468,7 @@ private fun RuntimeSetupPromptScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(22.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -1748,7 +1748,7 @@ private fun AgentSwitchSheet(
             Spacer(Modifier.height(16.dp))
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(26.dp),
                 color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             ) {
@@ -1950,7 +1950,7 @@ private fun RuntimeInstallationScreen(
             Spacer(Modifier.height(14.dp))
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(26.dp),
                 color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             ) {
@@ -2121,8 +2121,8 @@ private fun WorkspaceLaunchExperience(state: AppUiState) {
                 Box(
                     Modifier
                         .size(58.dp)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = glow), RoundedCornerShape(18.dp))
-                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f), RoundedCornerShape(18.dp)),
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = glow), RoundedCornerShape(26.dp))
+                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f), RoundedCornerShape(26.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -2182,7 +2182,7 @@ private fun WorkspaceLaunchExperience(state: AppUiState) {
     Row(
         Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f), RoundedCornerShape(22.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -2265,7 +2265,7 @@ private fun SetupLogPanel(logs: List<String>) {
             .fillMaxWidth()
             .clickable { expanded = !expanded },
         color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(26.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
@@ -2961,7 +2961,7 @@ private fun ProviderChoiceStep(
 
         Surface(
             modifier = Modifier.fillMaxWidth().weight(1f),
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(26.dp),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
@@ -2997,7 +2997,7 @@ private fun ProviderChoiceStep(
         Button(
             onClick = onContinue,
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(22.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -3627,7 +3627,7 @@ private fun ProjectsScreen(
                     Button(
                         onClick = onCreateQuickProject,
                         modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(22.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                     ) {
                         Icon(
@@ -3647,7 +3647,7 @@ private fun ProjectsScreen(
                     OutlinedButton(
                         onClick = { showCreate = true },
                         modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(22.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                     ) {
                         Icon(
@@ -3669,7 +3669,7 @@ private fun ProjectsScreen(
                 val isImportExpanded = importExpanded || state.projectImporting || state.gitCloneRunning
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(26.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
                 ) {
@@ -3785,7 +3785,7 @@ private fun ProjectsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(26.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
                     ) {
                         Column(
@@ -3959,7 +3959,7 @@ private fun ProjectsScreen(
                         Text(stringResource(R.string.ws_github_enter_code), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Surface(
                             modifier = Modifier.fillMaxWidth().clickable { state.githubUserCode?.let { clipboard.setText(AnnotatedString(it)) } },
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(22.dp),
                             color = MaterialTheme.colorScheme.primaryContainer,
                         ) {
                             Text(
@@ -4200,7 +4200,7 @@ private fun ProjectCard(
     var renameText by rememberSaveable(project.id) { mutableStateOf(project.name) }
     Card(Modifier.fillMaxWidth().clickable(onClick = onOpen), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+            Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
                 Icon(
                     if (project.type == ProjectType.ANDROID) Icons.Default.Android else Icons.Default.Folder,
                     null,
@@ -5936,7 +5936,7 @@ private fun FilesTab(
         item {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(22.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
@@ -6447,7 +6447,7 @@ private fun ChatTab(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 6.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.Bottom,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         var attachMenuOpen by remember { mutableStateOf(false) }
                         Box {
@@ -6510,7 +6510,7 @@ private fun ChatTab(
                         if (isRunning) {
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(40.dp)
                                     .background(
                                         color = MaterialTheme.colorScheme.error,
                                         shape = CircleShape,
@@ -6530,7 +6530,7 @@ private fun ChatTab(
                         if (!isRunning || canSend) {
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(40.dp)
                                     .background(
                                         color = if (canSend) Color(0xFF3B3898) else Color(0xFF282A2C),
                                         shape = CircleShape,
@@ -6569,7 +6569,7 @@ private fun QueuedFollowUpCard(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -7173,7 +7173,7 @@ private fun ChangesTab(
         item {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(22.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             ) {
